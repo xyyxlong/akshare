@@ -28,7 +28,7 @@ def get_major_index_valuation():
         "中证100": "000903.SH",
         "中证800": "000906.SH"
                }
-    for name,code in tqdm(indices.items(),desc=f"获取{indices.items()}估值……"):
+    for name,code in tqdm(indices.items(),desc=f"获取宽基指数估值……"):
         print(f"......查询{name} PE")
         try:
             # 获取基础估值数据[5,9](@ref)

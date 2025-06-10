@@ -25,7 +25,8 @@ VALUES
  14.8900, 12.3400, 14.1200);
  
 SELECT * FROM `industry_pe_history` ORDER BY `trade_date` DESC
-SELECT DISTINCT index_valuation_history.`index_name` FROM index_valuation_history
+SELECT DISTINCT industry_pe_history.`industry_code` FROM industry_pe_history
+SELECT COUNT(*) FROM industry_pe_history
 
 -- 指数历史估值表
 CREATE TABLE `index_valuation_history` (

@@ -18,7 +18,7 @@ DB_CONFIG = {
     'cursorclass': pymysql.cursors.DictCursor
 }
 
-STARTDAY="20230519"
+STARTDAY="20250519"
 
 
 def save_pe_to_mysql(symbol='证监会行业分类'):
@@ -77,9 +77,12 @@ def save_pe_to_mysql(symbol='证监会行业分类'):
 
                     pbar.set_postfix_str(f"Day {day} cached")
                     
-                except MySQLError as e:
+                except MySQLError as eer:
                     print(f"\nError processing {day}: {str(e)}")
                     conn.rollback()
+                    continue
+                except Exception as e:
+                    print(f"获取{day}数据处理异常: {str(e)}")
                     continue
             
             # 插入剩余数据（网页6剩余数据处理）
@@ -188,7 +191,8 @@ if __name__ == "__main__":
     
     #df = ak.stock_industry_pe_ratio_cninfo("证监会行业分类","20230519")
     #df = query_industry_pe_sequential(get_trade_days("20230501")) #从20230519开始有数据
+    #print(df)
   
     df = save_pe_to_mysql("证监会行业分类")
-    print(df)
+
     

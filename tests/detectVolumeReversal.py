@@ -15,6 +15,7 @@ GROUNDVOLUME = 0.05 #地量阈值检测时间内5%分位
 
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
+ISMY = False
 
 def detect_price_volume_reversal(stock_list: pd.DataFrame, 
                           start_date: str = "20200101", 
@@ -236,7 +237,7 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
 
             last_row = df.iloc[-1]
 
-            testTrue = False #配置，调测时改为True使用
+            testTrue = ISMY #默认配置False，调测时改为True使用，
 
             if any([
                     testTrue,
@@ -306,12 +307,27 @@ if __name__ == "__main__":
     
     #print(get_stock_pe('600519'))
 
-    # 执行检测
-    test_stocks=get_select_stocks()   
-    result = detect_price_volume_reversal(test_stocks, start_date = "20230501", n_years=1)
-    #result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=5)
+    my_select=r"..\input\selectlist_my.xlsx"
+    #是否检测自选True/False
+    ISMY = False
+
+    print(f"是否检测自选标的：{ISMY}")
+    
+    #选定标的
+    if ISMY:
+        test_stocks = get_select_stocks(my_select)
+    else:
+        test_stocks = get_select_stocks() 
+
+    # 执行检测 选取start_date开始日期数据，n_year内通过股价，交易额分位进行情绪判断买点，并给出标的和行业的估值参考
+    #result = detect_price_volume_reversal(test_stocks, start_date = "20230501", n_years=1) 
+    result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=3)
     end_date = datetime.now().strftime("%Y%m%d")
-    filename = f'.\output\detect\detect_volume_reversal{end_date}.xlsx'
+    if ISMY:
+        filename = f'.\output\detect\detect_volume_reversal{end_date}_my.xlsx'
+    else:
+        filename = f'.\output\detect\detect_volume_reversal{end_date}.xlsx'
+    
     print(f"检查成功检测数：{len(result)}")
     save_to_excel_filter(result,test_stocks,filename)
 

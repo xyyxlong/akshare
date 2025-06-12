@@ -24,15 +24,18 @@ RECEIVABLE_DAYS = 30  #应收账款周期小于30
 
 CHUNK_NUM = 1# 全市场数据过多分10块处理
 
-
+ISMY = False #是否选取自选配置
 
 def selectStock():
     ## A 股上市公司列表
-    #df = get_all_stocks()#对全市场数据进行处理
-    #stock_zh_a_spot_df = ipodatefilter_stocks(df,f"{STARTYEAR}0101")
-    stock_zh_a_spot_df = get_select_stocks()#对筛选过的列表进行处理
 
-    log.info("获取到 A 股上市公司列表")
+    if ISMY:
+        stock_zh_a_spot_df = get_select_stocks()#对自选列表进行处理
+    else:
+        df = get_all_stocks()#对全市场数据进行处理
+        stock_zh_a_spot_df = ipodatefilter_stocks(df,f"{STARTYEAR}0101") #对上市时间进行筛选
+ 
+    log.info("获取到 A 股上市公司列表，是否只选取自选股：{ISMY}")
     df_stock = stock_zh_a_spot_df[['代码','名称']]#[2523:]
 
     # 分块处理设置[2,3](@ref)

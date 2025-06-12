@@ -117,14 +117,14 @@ def get_stock_industry_valuation(stock_code, start_year="2023"):
     # 获取估值
     valuation_df = get_sw_industry_pe_history(industry["行业编码"].values[0],start_year)
 
-    stockPE=get_historical_year_pe(stock_code, start_year="2023")
+    #stockPE=get_historical_year_pe(stock_code, start_year="2023")
     
     # 数据增强：添加百分位分析
     #if not valuation_df.empty:
     #    for metric in ['PE', 'PB']:
     #        valuation_df[f'{metric}_百分位'] = valuation_df[metric].rank(pct=True)
     
-    return industry, valuation_df, stockPE
+    return industry, valuation_df#, stockPE
 
 
 
@@ -142,12 +142,12 @@ def df_to_excel(df):
 
 if __name__ == "__main__":
     # 示例：查询贵州茅台行业
-    df = get_industry_info("300394")
+    #df = get_industry_info("000858")
     #df = ak.stock_industry_pe_ratio_cninfo("证监会行业分类","20241223")
-    df_to_excel(df)
+    #df_to_excel(df)
 
 
-    #df = get_stock_industry_valuation("002555")
+    df = get_stock_industry_valuation("000858")
     
     print(f"{df}")
 

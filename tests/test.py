@@ -1,6 +1,8 @@
-﻿import numpy as np
+﻿import akshare as ak
+import numpy as np
 import pandas as pd
 import xlsxwriter
+import datetime
 
 
 
@@ -80,15 +82,28 @@ import xlsxwriter
 #   in_lower_band = hist_data['收盘价'] < (price_ma - 2*price_ma.std())
 #   valid_signal = low_volume_mask & in_lower_band
 #   ```
-hist_data = pd.DataFrame({"col1": np.random.randint(1, 501, size=1000)})
-print(hist_data)
-# 计算n年历史分位（参考网页5/7的地量判断逻辑）
-rolling_window = 100  # 假设每年250个交易日
-hist_data['volume_quantile'] = hist_data['col1'].rolling(rolling_window).apply(
-    lambda x: x.rank(pct=True).iloc[-1], raw=False)
 
-# 优化Excel写入（网页10）"""
-excelName = "test"
-writer = pd.ExcelWriter(f'.\output\{excelName}.xlsx',engine='xlsxwriter')
-hist_data.to_excel(writer, index=True,  index_label="ID")  
-writer.close()
+
+# 获取贵州茅台(600519)历史数据[4,8](@ref)
+stock_df = ak.stock_a_indicator_lg("600519")
+lastindex = stock_df.index[-1]
+pe=stock_df.loc[lastindex,'pe']
+pe_ttm=stock_df.loc[lastindex,'pe_ttm']
+print(f"pe={pe}  pe_ttm={pe_ttm}") 
+
+#hist_data = pd.DataFrame({"col1": np.random.randint(1, 501, size=1000)})
+#print(hist_data)
+## 计算n年历史分位（参考网页5/7的地量判断逻辑）
+#rolling_window = 100  # 假设每年250个交易日
+#hist_data['volume_quantile'] = hist_data['col1'].rolling(rolling_window).apply(
+#    lambda x: x.rank(pct=True).iloc[-1], raw=False)
+
+#last_index = hist_data.index[-1]  # 获取最后一行索引
+#hist_data.loc[last_index, 'industry'] = "B07"
+#hist_data.loc[last_index, 'industry_pe'] = 20.3
+
+## 优化Excel写入（网页10）"""
+#excelName = "test"
+#writer = pd.ExcelWriter(f'.\output\{excelName}.xlsx',engine='xlsxwriter')
+#hist_data.to_excel(writer, index=True,  index_label="ID")  
+#writer.close()

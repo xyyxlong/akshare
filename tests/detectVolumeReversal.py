@@ -5,8 +5,9 @@ import pandas as pd
 import xlsxwriter
 from tqdm import tqdm
 from getAllStock import get_all_stocks, get_select_stocks
+import commTools as ct
 from datetime import datetime, timedelta
-from getAllStock import get_all_stocks, get_select_stocks
+from get_industry_historyPE import get_industry_info
 
 KEEPDAY = 3
 DODUP = 0.15 #连续3个交易日放量增长率15%
@@ -88,10 +89,10 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
             #            hist_data[low_volume_mask]['成交额'].mean()) * 100, 2)
             #    }
             #    result.append(reversal_data)
-            time.sleep(0.5)        
+            time.sleep(0.3)        
         except Exception as e:
             print(f"股票{code}数据处理异常: {str(e)}")
-            time.sleep(0.5) 
+            time.sleep(0.3) 
             continue
             
     return result
@@ -131,6 +132,61 @@ def get_stock_data(code: str, start_date: str) -> pd.DataFrame:
     df.set_index('日期', inplace=True)
     return df
 
+def get_stock_industry_pe(stock_code: str) -> pd.DataFrame:
+    """
+    使用akshare获取股票所数行业的当前估值
+    
+    参数：
+        code : 股票代码（支持格式：'600519' ）
+    
+    返回：
+        DataFrame ：股票所行业最新交易日的估值信息
+    """
+    result = []
+    # 获取行业信息
+    industry = get_industry_info(stock_code)
+
+    last_trade_date = ct.get_last_trade_dates()
+    # 获取估值
+    # 获取行业PE数据（网页2接口）
+    pe_df = ak.stock_industry_pe_ratio_cninfo(
+        symbol="证监会行业分类",
+        date = last_trade_date)
+
+    if industry is not None and pe_df is not None:
+        # 数据筛选与格式化（网页2字段结构）
+        result = pe_df[pe_df["行业编码"] == industry["行业编码"].values[0]].rename(columns={
+            '变动日期': '日期',
+            '静态市盈率-加权平均': 'PE静-加权',
+            '静态市盈率-中位数': 'PE静-中位',
+            '静态市盈率-算术平均': 'PE静-平均',
+            '行业名称':'行业'
+        })
+
+    return result
+
+
+def get_stock_pe(stock_code: str):
+    """
+    使用akshare获取股票最新PE信息
+    
+    参数：
+        code : 股票代码（支持格式：'600519' ）
+    
+    返回：
+        DataFrame ：股票最新交易日的pe，pe_ttm
+    """
+    stock_df = []
+    pe = -1.0
+    pe_ttm = -1.0
+    # 获取行业    
+    stock_df = ak.stock_a_indicator_lg(stock_code)
+    last_index = stock_df.index[-1]
+    pe=stock_df.loc[last_index,'pe']
+    pe_ttm=stock_df.loc[last_index,'pe_ttm']
+
+    return pe,pe_ttm
+
 def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None:
     """
     将检测结果按股票代码分Sheet保存到Excel
@@ -158,28 +214,72 @@ def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None
     
 def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) -> None:
     """
-    优化后的存储函数（增加条件筛选）
+    将检测结果按股票代码分Sheet保存到Excel
+    优化后的存储函数（增加3个条件筛选）
     """
     sheets_to_write = []
     passNum = 0
     
-    # 筛选有效数据
-    for idx, code in enumerate(stock_list["代码"]):
-        if idx >= len(result) or result[idx].empty:
-            continue
-        df = result[idx].copy()
-        last_row = df.iloc[-1]
-        if any([last_row.get('p_mask', False),
-                last_row.get('v_mask', False),
-                last_row.get('vg_mask', False)]):
+    # 
+
+    for idx, code in tqdm(enumerate(stock_list["代码"]), total=len(stock_list)):
+        try:
+            if idx >= len(result) or result[idx].empty:
+                continue
+            df = result[idx].copy()
             # 显式构造索引避免警告
             df.index = pd.Index(
                 df.index.strftime('%Y%m%d'), 
                 dtype='object', 
                 name='日期'
             ).infer_objects()
-            sheets_to_write.append((str(code), df))
-            passNum += 1
+
+            last_row = df.iloc[-1]
+
+            testTrue = False #配置，调测时改为True使用
+
+            if any([
+                    testTrue,
+                    last_row.get('p_mask', False),
+                    last_row.get('v_mask', False),
+                    last_row.get('vg_mask', False)
+                    ]):
+            
+                #查询检测通过股票的行业PE
+                df_industry = []
+                df_industry = get_stock_industry_pe(code)
+            
+                # 先检查 df_industry 是否为 None
+                if df_industry is not None and not df_industry.empty:
+                    last_index = df_industry.index[-1]  # 获取最后一行索引
+                    industry_id = df_industry.loc[last_index, "行业编码"]
+                    industry_name = df_industry.loc[last_index, "行业"]
+                    pe_weighted = df_industry.loc[last_index, "PE静-加权"]
+                    pe_mean = df_industry.loc[last_index, "PE静-平均"]
+                    pe_median = df_industry.loc[last_index, "PE静-中位"]
+                else:
+                    # 处理 df_industry 为 None 或 empty 的情况
+                    industry_id = industry_name = pe_weighted = pe_mean = pe_median = None
+
+                stock_pe,stock_pe_ttm = get_stock_pe(code)
+
+                last_index = df.index[-1]  # 获取最后一行索引
+                df.loc[last_index, 'industry_id'] = industry_id
+                df.loc[last_index, 'industry_name'] = industry_name
+                df.loc[last_index, 'pe_weighted'] = pe_weighted
+                df.loc[last_index, 'pe_mean'] = pe_mean
+                df.loc[last_index, 'pe_median'] = pe_median
+                df.loc[last_index, 'stock_pe'] = stock_pe
+                df.loc[last_index, 'stock_pe_ttm'] = stock_pe_ttm
+                sheets_to_write.append((str(code), df))
+
+                passNum += 1
+                time.sleep(0.3) 
+            
+        except Exception as e:
+            print(f"{code}获取行业或股票估值异常: {str(e)}")
+            time.sleep(0.3) 
+            continue
     
     # 无有效数据时跳过写入
     if not sheets_to_write:
@@ -203,19 +303,18 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
 
 # 每天（有空）执行检测
 if __name__ == "__main__":
-
-    #test_stocks = pd.DataFrame({
-    #    "代码": ["301187", "603596", "002032", "300866", "301077"],
-    #    "名称": ["301187", "603596", "002032", "300866", "301077"]
-    #})
-    test_stocks=get_select_stocks()
+    
+    #print(get_stock_pe('600519'))
 
     # 执行检测
-    result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=5)
+    test_stocks=get_select_stocks()   
+    result = detect_price_volume_reversal(test_stocks, start_date = "20230501", n_years=1)
+    #result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=5)
     end_date = datetime.now().strftime("%Y%m%d")
     filename = f'.\output\detect\detect_volume_reversal{end_date}.xlsx'
     print(f"检查成功检测数：{len(result)}")
     save_to_excel_filter(result,test_stocks,filename)
+
 
 
 

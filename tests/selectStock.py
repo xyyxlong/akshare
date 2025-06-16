@@ -35,7 +35,7 @@ def selectStock():
         df = get_all_stocks()#对全市场数据进行处理
         stock_zh_a_spot_df = ipodatefilter_stocks(df,f"{STARTYEAR}0101") #对上市时间进行筛选
  
-    log.info("获取到 A 股上市公司列表，是否只选取自选股：{ISMY}")
+    log.info(f"获取到 A 股上市公司列表，是否只选取自选股：{ISMY}")
     df_stock = stock_zh_a_spot_df[['代码','名称']]#[2523:]
 
     # 分块处理设置[2,3](@ref)

@@ -309,7 +309,7 @@ if __name__ == "__main__":
 
     my_select=r"..\input\selectlist_my.xlsx"
     #是否检测自选True/False
-    ISMY = True
+    ISMY = False
 
     print(f"是否检测自选标的：{ISMY}")
     

@@ -489,3 +489,12 @@
 2025-06-16 17:06:32 | ERROR    | log4ak.py:109 - 2025-06-10回测失败: Cannot compare Timestamp with datetime.date. Use ts == pd.Timestamp(date) or ts.date() == date instead.
 2025-06-16 17:06:32 | ERROR    | log4ak.py:109 - 2025-06-11回测失败: Cannot compare Timestamp with datetime.date. Use ts == pd.Timestamp(date) or ts.date() == date instead.
 2025-06-16 17:06:32 | ERROR    | log4ak.py:109 - 2025-06-12回测失败: Cannot compare Timestamp with datetime.date. Use ts == pd.Timestamp(date) or ts.date() == date instead.
+2025-06-16 18:24:36 | ERROR    | log4ak.py:109 - 002555已有待处理订单
+2025-06-16 18:24:36 | ERROR    | log4ak.py:109 - 002555已有待处理订单
+2025-06-17 10:36:44 | ERROR    | log4ak.py:109 - 002555已有待处理订单
+2025-06-17 10:36:44 | ERROR    | log4ak.py:109 - 002555已有待处理订单
+2025-06-17 13:49:17 | ERROR    | log4ak.py:109 - 2024-10-08现金不足: 需要141357.90元, 可用135207.59元
+2025-06-17 14:28:31 | ERROR    | log4ak.py:109 - 2024-10-08现金不足: 需要141357.90元, 可用135207.59元
+2025-06-17 15:19:36 | ERROR    | log4ak.py:109 - 数据库连接失败
+2025-06-17 15:19:36 | ERROR    | log4ak.py:109 - 服务不可用
+2025-06-17 15:19:36 | ERROR    | log4ak.py:109 - 参数类型错误

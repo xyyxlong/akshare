@@ -5,9 +5,8 @@ from pymysql import MySQLError
 from datetime import datetime,timedelta
 from tqdm import tqdm
 import log4ak
-import logging
 
-log = log4ak.LogManager(log_level=logging.INFO)
+log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 
 # 数据库配置（适配PyMySQL参数）
 DB_CONFIG = {

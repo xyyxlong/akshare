@@ -3,13 +3,13 @@ import numpy as np
 import akshare as ak
 import pandas as pd
 import datetime
-import logging
 import log4ak
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from getAllStock import get_all_stocks, get_select_stocks, ipodatefilter_stocks
 
-log = log4ak.LogManager(log_level=logging.INFO)
+
+log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 

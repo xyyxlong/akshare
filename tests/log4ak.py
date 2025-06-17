@@ -2,6 +2,15 @@
 import os
 from logging.handlers import RotatingFileHandler
 
+CRITICAL = 50
+FATAL = CRITICAL
+ERROR = 40
+WARNING = 30
+WARN = WARNING
+INFO = 20
+DEBUG = 10
+NOTSET = 0
+
 
 class LevelFilter(logging.Filter):
     """精准级别过滤器[1,4](@ref)"""
@@ -95,13 +104,6 @@ class LogManager:
         handler.addFilter(LevelFilter(level))
         handler.setFormatter(self._create_formatter())
         return handler
-
-    def _create_console_handler(self, level):
-        """创建控制台处理器[7](@ref)"""
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(level)
-        console_handler.setFormatter(self._create_formatter())
-        return console_handler
 
     # 保留原有接口方法
     def debug(self, msg): self.logger.debug(msg)

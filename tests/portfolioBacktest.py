@@ -74,7 +74,7 @@ class PositionTracker:
     
     def calculate_daily_positionvalues(
         self, 
-        current_date: Union[str, datetime], 
+        current_date: str, 
         current_price: float
     ) -> Tuple[float, float, float]:
         """
@@ -89,7 +89,7 @@ class PositionTracker:
         # 累计分红收益 (税后)
         dividend_income = sum(
             amount for date, _, amount in self.dividends 
-            if  pd.to_datetime(date).date() <= current_date
+            if  pd.to_datetime(date) <= pd.to_datetime(current_date)
         )
         
         # 总收益 = (当前市值 - 成本市值) + 分红收益
@@ -109,7 +109,8 @@ class PortfolioSimulator:
         initial_cash: float = 0, 
         start_date: str = '20230101', 
         buy_fee: float = 0.0017, 
-        dividend_tax: float = 0.1
+        dividend_tax: float = 0.1,
+        isSaveStock: bool = False
     ) -> None:
         """
         初始化投资组合
@@ -124,10 +125,11 @@ class PortfolioSimulator:
         self.start_date = start_date #组合回测开始时间
         self.buy_fee = buy_fee #买入费率 (默认0.17%)
         self.dividend_tax = dividend_tax  #分红税率 (默认10%)
+        self.isSaveStock = isSaveStock #是否需要在excel存储每天的股票价格(默认False)
         self.positions = {}  # 单只股票持仓跟踪器组合中所有股票持仓的跟踪器 {股票代码: PositionTracker}
         self.dividend_cache = {}  # 单只股票期间所有分红数据的跟踪器 {股票代码: dividend}
         self.dividend_records = []  # 全部分红记录
-        self.trade_dates = self._get_trading_calendar(start_date)
+        self.trade_dates = self._get_trading_calendar(start_date) #str类型的交易日List
         # 新增价格缓存字典 {股票代码: DataFrame}
         self.price_cache = {}
         # 新增回测结束日期存储
@@ -155,6 +157,7 @@ class PortfolioSimulator:
                     adjust=""
                 )
                 # 设置日期索引加速查询[9](@ref)
+                df['日期']=pd.to_datetime(df['日期']).dt.strftime('%Y%m%d')
                 df = df.set_index('日期')
                 self.price_cache[code] = df
                 log.info(f"缓存{code}数据: {start_date}至{end_date}共{len(df)}条")
@@ -194,7 +197,7 @@ class PortfolioSimulator:
         log.info(f"登记买入订单: {buy_date}买入{code} {shares}股")
         return True
 
-    def process_pending_orders(self, current_date: Union[str, datetime]) -> None:
+    def process_pending_orders(self, current_date: str) -> None:
         """
         处理当日应执行的订单
         创建持仓PositionTracker
@@ -203,24 +206,21 @@ class PortfolioSimulator:
 
         executed_orders = []
         #强制日期格式转换
-        current_date_dt = pd.to_datetime(current_date).date()
 
         for order in self.pending_orders:
             code, buy_date, shares = order
-            #强制日期格式转换
-            buy_date_dt = pd.to_datetime(buy_date).date()
-            if current_date != buy_date_dt:
+            if current_date != buy_date:
                 continue
                 
             try:
                 # 获取当日实际价格
-                if code not in self.price_cache or current_date_dt not in self.price_cache[code].index:
+                if code not in self.price_cache or current_date not in self.price_cache[code].index:
                     # 容错：自动补充缓存
                     self._cache_stock_data(code, self.start_date, self.backtest_end_date)
                 
                 # 从缓存获取价格（统一日期格式）
                 price_df = self.price_cache[code]
-                close_price = price_df.loc[current_date_dt, '收盘']
+                close_price = price_df.loc[current_date, '收盘']
                 actual_price = close_price * (1 + self.buy_fee)
                 
                 # 计算成本
@@ -268,7 +268,7 @@ class PortfolioSimulator:
                 '每股分红': [1.5, 2.0]
             })
     
-    def process_dividends(self, current_date: Union[str, datetime]) -> None:
+    def process_dividends(self, current_date: str) -> None:
         """处理分红事件"""
         for code, position in self.positions.items():
             # 从缓存获取数据（不再实时调用API）
@@ -303,7 +303,7 @@ class PortfolioSimulator:
                         'amount': net_amount
                     })
     
-    def calculate_daily_totalvalues(self, current_date:datetime) -> Dict[str, Any]:
+    def calculate_daily_totalvalues(self, current_date:str) -> Dict[str, Any]:
         """
         计算组合每日价值
         :return: {
@@ -356,7 +356,8 @@ class PortfolioSimulator:
             result['positions_value'] += market_value
             result[f'{code}return'] = one_position_return
             result[f'{code}dividend'] = dividend_income
-            result[f'{code}current_price'] = current_price #如果要看每天的价格可激活此行
+            if self.isSaveStock :
+                result[f'{code}current_price'] = current_price #如果要看每天的价格可激活此行
         
         #2，计算总市值=现金+持仓市值
         result['total_value'] = self.current_cash +  result['positions_value']
@@ -385,15 +386,10 @@ class PortfolioSimulator:
             self._cache_stock_data(code, self.start_date, self.backtest_end_date)
         
         # 预加载分红数据（包含待处理订单）
-        self._precache_dividend_data(list(all_codes))  # 修改点：传入所有相关代码
-
-        
-
-        # 对预缓存所有交易日期格式处理
-        self.trade_dates = [pd.to_datetime(d).date() for d in self.trade_dates]        
+        self._precache_dividend_data(list(all_codes))  # 修改点：传入所有相关代码 
         
         # 执行回测循环
-        valid_dates = [d for d in self.trade_dates if d <= pd.to_datetime(self.backtest_end_date).date()]
+        valid_dates = [d for d in self.trade_dates if pd.to_datetime(d).date() <= pd.to_datetime(self.backtest_end_date).date()]
         results = []
         
         for date in valid_dates:
@@ -442,7 +438,8 @@ def test_portfolio_simulator() -> pd.DataFrame:
     # 初始化组合
     simulator = PortfolioSimulator(
         initial_cash=1000000,
-        start_date="20230101"
+        start_date="20230101",
+        isSaveStock = False #excel中是否要存储各股票每天的价格，用作手工校验
     )
     
     # 从excel创建股票订单

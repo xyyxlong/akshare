@@ -1,6 +1,7 @@
 ﻿import logging
 import os
 from logging.handlers import RotatingFileHandler
+from typing import Optional
 
 CRITICAL = 50
 FATAL = CRITICAL
@@ -22,8 +23,24 @@ class LevelFilter(logging.Filter):
         return record.levelno == self.level
 
 class LogManager:
-    def __init__(self, log_dir="log", log_level=logging.DEBUG):
+
+    # 单例调用日志接口
+    _instance: Optional['LogManager'] = None
+    
+    def __new__(cls, log_dir: str = "log", log_level: int = logging.ERROR):
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+            cls._instance.__initialized = False
+            cls._instance.__init__(log_dir, log_level)
+        return cls._instance
+
+
+    def __init__(self, log_dir="log", log_level=logging.ERROR):
         """支持动态日志级别配置[5,8](@ref)"""
+
+        if hasattr(self, '__initialized') and self.__initialized:
+            return
+
         # 目录结构初始化
         self.log_dir = log_dir
         self._init_log_dirs(log_dir)

@@ -3,6 +3,12 @@ import numpy as np
 import pandas as pd
 import xlsxwriter
 import datetime
+import log4ak
+
+def testlog() -> None:
+    log = log4ak.LogManager(log_level=log4ak.ERROR)
+
+
 
 
 
@@ -85,11 +91,11 @@ import datetime
 
 
 # 获取贵州茅台(600519)历史数据[4,8](@ref)
-stock_df = ak.stock_a_indicator_lg("600519")
-lastindex = stock_df.index[-1]
-pe=stock_df.loc[lastindex,'pe']
-pe_ttm=stock_df.loc[lastindex,'pe_ttm']
-print(f"pe={pe}  pe_ttm={pe_ttm}") 
+#stock_df = ak.stock_a_indicator_lg("600519")
+#lastindex = stock_df.index[-1]
+#pe=stock_df.loc[lastindex,'pe']
+#pe_ttm=stock_df.loc[lastindex,'pe_ttm']
+#print(f"pe={pe}  pe_ttm={pe_ttm}") 
 
 #hist_data = pd.DataFrame({"col1": np.random.randint(1, 501, size=1000)})
 #print(hist_data)

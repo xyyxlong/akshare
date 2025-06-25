@@ -6,16 +6,20 @@ import xlsxwriter
 from tqdm import tqdm
 from getAllStock import get_all_stocks, get_select_stocks
 import commTools as ct
+from get_stockPE_his import get_stock_pe_percentile
 from datetime import datetime, timedelta
 from get_industry_historyPE import get_industry_info
 
-KEEPDAY = 3
-DODUP = 0.15 #连续3个交易日放量增长率15%
-GROUNDVOLUME = 0.05 #地量阈值检测时间内5%分位
+KEEPDAY = 5
+DODUP = 0.12 #连续5个交易日放量平均增长率15%
+GROUNDVOLUME = 0.05 #地价地量阈值检测时间内5%分位
 
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 ISMY = False
+
+N_YEARS = 3
+IS_MYSQL = True
 
 def detect_price_volume_reversal(stock_list: pd.DataFrame, 
                           start_date: str = "20200101", 
@@ -67,7 +71,7 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
             hist_data['v_growth'] = hist_data['成交额'].pct_change() + 1
             #consecutive_growth = (hist_data['volume_growth']
             #                      .rolling(KEEPDAY).apply(lambda x: np.all(x >= (1+DODUP))))
-            hist_data['vg_mask'] = hist_data['v_growth'].rolling(KEEPDAY).apply(lambda x: np.all(x >= (1+DODUP)))==1
+            hist_data['vg_mask'] = hist_data['v_growth'].rolling(KEEPDAY).apply(lambda x: np.mean(x >= (1+DODUP)))==1
             
             result.append(hist_data)
             #if len(result) == 0:
@@ -235,6 +239,7 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 name='日期'
             ).infer_objects()
 
+            # 只获取最新的一天进行价格和交易量判断，达到阈值才查询PE信息进行展示
             last_row = df.iloc[-1]
 
             testTrue = ISMY #默认配置False，调测时改为True使用，
@@ -262,9 +267,22 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                     # 处理 df_industry 为 None 或 empty 的情况
                     industry_id = industry_name = pe_weighted = pe_mean = pe_median = None
 
-                stock_pe,stock_pe_ttm = get_stock_pe(code)
+
+
 
                 last_index = df.index[-1]  # 获取最后一行索引
+                if IS_MYSQL:
+                    #通过数据库查询PE
+                    stockPE = get_stock_pe_percentile(code, N_YEARS,last_index)
+                    stock_pe = stockPE['pe']
+                    stock_pe_ttm = stockPE['pe_ttm']
+                    stock_pe_percentile = stockPE['percentile']
+                else:
+                    #通过Akshare接口查询PE
+                    stock_pe,stock_pe_ttm = get_stock_pe(code) #通过Akshare接口查询PE
+                    stock_pe_percentile = None
+
+                
                 df.loc[last_index, 'industry_id'] = industry_id
                 df.loc[last_index, 'industry_name'] = industry_name
                 df.loc[last_index, 'pe_weighted'] = pe_weighted
@@ -272,6 +290,7 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 df.loc[last_index, 'pe_median'] = pe_median
                 df.loc[last_index, 'stock_pe'] = stock_pe
                 df.loc[last_index, 'stock_pe_ttm'] = stock_pe_ttm
+                df.loc[last_index, 'percentile'] = stock_pe_percentile
                 sheets_to_write.append((str(code), df))
 
                 passNum += 1
@@ -309,9 +328,12 @@ if __name__ == "__main__":
 
     my_select=r"..\input\selectlist_my.xlsx"
     #是否检测自选True/False
-    ISMY = False
+    ISMY = True
+    #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
+    IS_MYSQL = True
 
     print(f"是否检测自选标的：{ISMY}")
+    print(f"是否从数据库获取PE信息：{IS_MYSQL}")
     
     #选定标的
     if ISMY:
@@ -321,7 +343,8 @@ if __name__ == "__main__":
 
     # 执行检测 选取start_date开始日期数据，n_year内通过股价，交易额分位进行情绪判断买点，并给出标的和行业的估值参考
     #result = detect_price_volume_reversal(test_stocks, start_date = "20230501", n_years=1) 
-    result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=3)
+    N_YEARS = 3
+    result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
     end_date = datetime.now().strftime("%Y%m%d")
     if ISMY:
         filename = f'.\output\detect\detect_volume_reversal{end_date}_my.xlsx'

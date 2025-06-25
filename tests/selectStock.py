@@ -22,9 +22,9 @@ PASTYEAR = 5 #计算过去5年的净资产收益率，负债率，应收账款�
 DEBT_RATIOS = 70 #负债率低于70%
 RECEIVABLE_DAYS = 30  #应收账款周期小于30
 
-CHUNK_NUM = 1# 全市场数据过多分10块处理
+CHUNK_NUM = 5# 全市场数据过多分10块处理
 
-ISMY = False #是否选取自选配置
+ISMY = False #是否选取自选配置False/True
 
 def selectStock():
     ## A 股上市公司列表
@@ -36,7 +36,7 @@ def selectStock():
         stock_zh_a_spot_df = ipodatefilter_stocks(df,f"{STARTYEAR}0101") #对上市时间进行筛选
  
     log.info(f"获取到 A 股上市公司列表，是否只选取自选股：{ISMY}")
-    df_stock = stock_zh_a_spot_df[['代码','名称']]#[2523:]
+    df_stock = stock_zh_a_spot_df[['代码','名称']]#[2882:]
 
     # 分块处理设置[2,3](@ref)
     total_rows = len(df_stock)
@@ -51,7 +51,7 @@ def selectStock():
     for file_num, chunk_idx in enumerate(chunk_indices):
         
         chunk_df = df_stock.iloc[chunk_idx]
-        df_result = pd.DataFrame(columns=['stock','name','指标1','指标2','指标3','指标4','指标5','指标6','ratio','综合评估'])
+        df_result = pd.DataFrame(columns=['stock','name','指标1-ROI','指标2-现金','指标3-净利','指标4-负债','指标5-回款','指标6-PE','ratio','综合评估'])
         log.info(f"开始处理第{file_num+1}批数据，包含{len(chunk_df)}条记录")
         checkcount = 0
         
@@ -74,12 +74,12 @@ def selectStock():
                 df_result.loc[row_index] = {
                     'stock': r_code,
                     'name': r_name,
-                    '指标1': var1,
-                    '指标2': var2,
-                    '指标3': var3,
-                    '指标4': var4,
-                    '指标5': var5,
-                    '指标6': var6,
+                    '指标1-ROI': var1,
+                    '指标2-现金': var2,
+                    '指标3-净利': var3,
+                    '指标4-负债': var4,
+                    '指标5-回款': var5,
+                    '指标6-PE': var6,
                     'ratio': ratio,
                     '综合评估': varAll
                 }

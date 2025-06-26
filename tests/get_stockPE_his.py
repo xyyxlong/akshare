@@ -40,6 +40,61 @@ SELECT_SQL = """
     """
 
 
+
+def get_stock_pe_his(stock_code: str) -> pd.DataFrame:
+    """
+    查询指定股票所有历史PE数据
+    
+    返回格式:
+    DataFrame包含列: 
+        trade_date (str): 交易日期 (YYYY-MM-DD格式)
+        pe (float): 静态市盈率
+        pe_ttm (float): 滚动市盈率(TTM)
+        
+    无数据时返回空DataFrame
+    """
+
+    HISTORY_SQL = """
+        SELECT 
+            trade_date AS `日期`, 
+            pe, 
+            pe_ttm 
+        FROM stock_pe_history 
+        WHERE stock_code = %s 
+        ORDER BY trade_date
+    """
+    try:
+        # 建立数据库连接
+        with pymysql.connect(**DB_CONFIG) as conn:
+            # 创建游标对象
+            with conn.cursor() as cursor:
+                log.debug(f"执行SQL查询: {HISTORY_SQL}，参数: {stock_code}")
+                
+                # 执行查询 - 使用参数化查询确保安全
+                cursor.execute(HISTORY_SQL, (stock_code,))
+                results = cursor.fetchall()
+                
+                # 转换结果为DataFrame
+                df = pd.DataFrame(results)
+                
+                # 类型转换处理
+                if not df.empty:
+                    df['日期'] = pd.to_datetime(df['日期'])
+                    df.set_index('日期', inplace=True)
+                    
+                #    df['pe'] = df['pe'].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
+                #    df['pe_ttm'] = df['pe_ttm'].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
+                
+                log.info(f"{stock_code}获取到 {len(df)} 条历史PE数据")
+                return df
+            
+    except pymysql.Error as dberr:
+        log.error(f"数据库查询错误: {dberr}")
+        return pd.DataFrame()
+    except Exception as e:
+        log.error(f"查询历史PE数据时发生未知异常: {e}")
+        return pd.DataFrame()
+
 def get_stock_pe_percentile(code: str, statyears: int, getdate: str = None) -> dict:
     """
     获取股票PE百分位(兼容MySQL严格模式)
@@ -236,5 +291,48 @@ def test_pe_calculator():
     result = get_stock_pe_percentile("999999", 5)
     print(f"无效股票查询结果: {result}")
 
+
+# get_stock_pe_his的测试套件
+def test_pe_service():
+    print("\n" + "="*50)
+    print("测试股票历史PE数据接口".center(50))
+    print("="*50)
+    
+    # 测试用例1: 有效股票（如贵州茅台）
+    test_code = "600519"
+    print(f"\n测试用例1: 有效股票代码 {test_code}")
+    df = get_stock_pe_his(test_code)
+    
+    if not df.empty:
+        print(f"获取数据量: {len(df)} 条")
+        print("最近5条记录:")
+        print(df.tail())
+        
+        # 数据质量检查
+        missing_pe = df['pe'].isnull().sum()
+        missing_pe_ttm = df['pe_ttm'].isnull().sum()
+        print(f"\n数据完整性检查: PE缺失 {missing_pe}, PE_TTM缺失 {missing_pe_ttm}")
+    else:
+        print("未获取到数据")
+    
+    # 测试用例2: 无效股票代码
+    invalid_code = "999999"
+    print(f"\n测试用例2: 无效股票代码 {invalid_code}")
+    df_invalid = get_stock_pe_his(invalid_code)
+    if df_invalid.empty:
+        print(f"未找到股票{invalid_code}的数据，返回空DataFrame")
+    
+    # 测试用例3: 边缘情况
+    edge_code = "000001"  # 平安银行
+    print(f"\n测试用例3: 测试部分数据的股票 {edge_code}")
+    df_edge = get_stock_pe_his(edge_code)
+    if not df_edge.empty:
+        min_date = df_edge['trade_date'].min()
+        max_date = df_edge['trade_date'].max()
+        print(f"数据时间范围: {min_date} 至 {max_date}")
+    else:
+        print(f"未找到股票{edge_code}的数据")
+
 if __name__ == "__main__":
-    test_pe_calculator()
+    #test_pe_calculator()
+    test_pe_service()

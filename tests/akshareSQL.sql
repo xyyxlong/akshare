@@ -28,6 +28,16 @@ SELECT * FROM `industry_pe_history` ORDER BY `trade_date` DESC
 SELECT DISTINCT industry_pe_history.`industry_code` FROM industry_pe_history
 SELECT COUNT(*) FROM industry_pe_history
 
+               SELECT 
+                    trade_date,
+                    pe_weighted AS 'PE静-加权',
+                    pe_median AS 'PE静-中位',
+                    pe_mean AS 'PE静-平均'
+                FROM industry_pe_history
+                WHERE industry_code = 'R90'
+                ORDER BY trade_date ASC
+
+
 -- 指数历史估值表
 CREATE TABLE `index_valuation_history` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '自增主键',
@@ -105,10 +115,15 @@ VALUES
 ("000333","美的集团",'2015-01-06',25.1404,13.0392,3.5099,2.5229,2.5229,1.105,0.9807,13368328.66);
 
 SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="000333" ORDER BY `trade_date` DESC
+SELECT * FROM `stock_pe_history`  WHERE stock_code="002460" ORDER BY `trade_date` DESC
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
-SELECT COUNT(*) FROM stock_pe_history WHERE trade_date = "20240620" AND stock_code="000333"  
+SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="002460"  AND  trade_date = "20240620" 
 SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_code IN 
 ("600036","000858","601919","000333","002555","002602","002460","002738")
+
+      SELECT trade_date AS `日期`, pe, pe_ttm 
+        FROM stock_pe_history 
+        WHERE stock_code = %s 
+        ORDER BY trade_date
 
      

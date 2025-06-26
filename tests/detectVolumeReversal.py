@@ -5,10 +5,14 @@ import pandas as pd
 import xlsxwriter
 from tqdm import tqdm
 from getAllStock import get_all_stocks, get_select_stocks
+import get_industry_historyPE as gi
+import get_stockPE_his as gs
 import commTools as ct
-from get_stockPE_his import get_stock_pe_percentile
 from datetime import datetime, timedelta
-from get_industry_historyPE import get_industry_info
+import log4ak
+
+
+log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 
 KEEPDAY = 5
 DODUP = 0.12 #连续5个交易日放量平均增长率15%
@@ -23,7 +27,7 @@ IS_MYSQL = True
 
 def detect_price_volume_reversal(stock_list: pd.DataFrame, 
                           start_date: str = "20200101", 
-                          n_years: int = 3) -> pd.DataFrame:
+                          n_years: int = 3) -> list:
     """
     地量地价反转信号检测函数
     
@@ -33,7 +37,7 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
         n_years    : int，历史数据回溯年限
     
     返回：
-        DataFrame，包含符合条件的股票及信号特征：
+        result     : list[DataFrame]，包含符合条件的股票及信号特征：
             ["代码","名称","地量日期","反转日期","量能变化率(%)"]
     """
     # 初始化结果容器
@@ -96,7 +100,7 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
             #    result.append(reversal_data)
             time.sleep(0.3)        
         except Exception as e:
-            print(f"股票{code}数据处理异常: {str(e)}")
+            log.error(f"股票{code}数据处理异常: {str(e)}")
             time.sleep(0.3) 
             continue
             
@@ -149,7 +153,7 @@ def get_stock_industry_pe(stock_code: str) -> pd.DataFrame:
     """
     result = []
     # 获取行业信息
-    industry = get_industry_info(stock_code)
+    industry = gi.get_industry_info(stock_code)
 
     last_trade_date = ct.get_last_trade_dates()
     # 获取估值
@@ -192,6 +196,78 @@ def get_stock_pe(stock_code: str):
 
     return pe,pe_ttm
 
+def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
+    """
+    检测完成后根据结果按股票代码分查询PE相关信息
+    """
+    resultlist = []
+    passNum = 0
+   
+
+    for idx, code in tqdm(enumerate(stock_list["代码"]), total=len(stock_list)):
+        try:
+            if idx >= len(result) or result[idx].empty:
+                continue
+            df = result[idx].copy()
+            # 显式构造索引避免警告
+
+            # 只获取最新的一天进行价格和交易量判断，达到阈值才查询PE信息进行展示
+            last_row = df.iloc[-1]
+
+            testTrue = ISMY #默认配置False，调测时改为True使用，
+
+            if any([
+                    testTrue,
+                    last_row.get('p_mask', False),
+                    last_row.get('v_mask', False),
+                    last_row.get('vg_mask', False)
+                    ]):
+            
+                #查询检测通过股票的行业PE
+                df_industry_historyPE = []
+                df_industry_historyPE = gi.get_stock_industry_pe_mysql(code)
+
+
+                # 处理 industry_info 为 None 或 empty 的情况
+                pe_history = industry_id = industry_name = pe_weighted = pe_mean = pe_median = None
+            
+                # 先检查 df_industry_historyPE 是否为 None
+                if df_industry_historyPE is not None :
+                    industry_info = df_industry_historyPE['industry_info']  # 获取行业信息
+                    #根据行业编码获取行业历史PE
+                    pe_history = gi.get_industry_pe_mysql_new_conn(industry_info['行业编码'].values[0])
+
+                df = pd.merge(df,pe_history,how='left',on='日期')
+
+                stock_pe_his = gs.get_stock_pe_his(code)
+                if stock_pe_his is not None and not stock_pe_his.empty:
+                     # 3. 设置索引进行高效合并
+
+                    right_df = stock_pe_his.copy()
+                    
+                    df = pd.merge(df,right_df,how='left',on='日期')
+
+                
+                df.index = pd.Index(
+                    df.index.strftime('%Y%m%d'), 
+                    dtype='object', 
+                    name='日期'
+                ).infer_objects()
+
+                resultlist.append((str(code), df))
+
+                passNum += 1
+                time.sleep(0.3) 
+            
+        except Exception as e:
+            log.error(f"{code}获取行业信息异常: {str(e)}")
+            time.sleep(0.3) 
+            continue
+
+    log.info(f"今天检测通过数量：{passNum}")
+    return resultlist
+
+
 def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None:
     """
     将检测结果按股票代码分Sheet保存到Excel
@@ -201,21 +277,43 @@ def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None
         stock_list  : 原始股票列表（含代码列）
         filename    : 输出Excel文件名（如"volume_signals.xlsx"）
     """
-    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-        # 遍历股票代码与对应的DataFrame
-        for idx, code in enumerate(stock_list["代码"]):
-            if idx < len(result) and not result[idx].empty:  # 确保索引不越界且数据非空
-                # 提取当前股票的DataFrame
-                df = result[idx].copy()
-                df.index = df.index.strftime('%Y%m%d')  # 设置日期格式
-                # 写入Excel，Sheet名使用股票代码（字符串格式避免特殊符号问题）
-                df.to_excel(
-                    writer, 
-                    sheet_name=str(code), 
-                    index=True,  # 保留日期索引
-                    header=True
-                )
 
+    # 无有效数据时跳过写入
+    if not result:
+        log.error("警告：无符合条件的股票数据，跳过Excel生成")
+        return
+    passNum = 0
+
+    # 写入Excel
+    try:
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            for sheet_name, df in result:
+                df.to_excel(writer, sheet_name=sheet_name, index=True)
+                passNum += 1
+            # 若所有Sheet均被过滤，添加默认Sheet
+            if len(writer.sheets) == 0:
+                pd.DataFrame(["无符合条件的数据"]).to_excel(writer, sheet_name="Empty")
+        
+    except PermissionError:
+        log.error(f"错误：文件 {filename} 被其他程序占用，请关闭后重试")
+
+    log.info(f"成功存储excel数量：{passNum}")
+
+
+    #with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+    #    # 遍历股票代码与对应的DataFrame
+    #    for idx, code in enumerate(stock_list["代码"]):
+    #        if idx < len(result) and not result[idx].empty:  # 确保索引不越界且数据非空
+    #            # 提取当前股票的DataFrame
+    #            df = result[idx].copy()
+    #            df.index = df.index.strftime('%Y%m%d')  # 设置日期格式
+    #            # 写入Excel，Sheet名使用股票代码（字符串格式避免特殊符号问题）
+    #            df.to_excel(
+    #                writer, 
+    #                sheet_name=str(code), 
+    #                index=True,  # 保留日期索引
+    #                header=True
+    #            )
     
 def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) -> None:
     """
@@ -224,8 +322,7 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
     """
     sheets_to_write = []
     passNum = 0
-    
-    # 
+   
 
     for idx, code in tqdm(enumerate(stock_list["代码"]), total=len(stock_list)):
         try:
@@ -273,7 +370,7 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 last_index = df.index[-1]  # 获取最后一行索引
                 if IS_MYSQL:
                     #通过数据库查询PE
-                    stockPE = get_stock_pe_percentile(code, N_YEARS,last_index)
+                    stockPE = gs.get_stock_pe_percentile(code, N_YEARS,last_index)
                     stock_pe = stockPE['pe']
                     stock_pe_ttm = stockPE['pe_ttm']
                     stock_pe_percentile = stockPE['percentile']
@@ -297,13 +394,13 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 time.sleep(0.3) 
             
         except Exception as e:
-            print(f"{code}获取行业或股票估值异常: {str(e)}")
+            log.error(f"{code}获取行业或股票估值异常: {str(e)}")
             time.sleep(0.3) 
             continue
     
     # 无有效数据时跳过写入
     if not sheets_to_write:
-        print("警告：无符合条件的股票数据，跳过Excel生成")
+        log.error("警告：无符合条件的股票数据，跳过Excel生成")
         return
     
     # 写入Excel
@@ -316,24 +413,45 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 pd.DataFrame(["无符合条件的数据"]).to_excel(writer, sheet_name="Empty")
         
     except PermissionError:
-        print(f"错误：文件 {filename} 被其他程序占用，请关闭后重试")
+        log.error(f"错误：文件 {filename} 被其他程序占用，请关闭后重试")
 
-    print(f"今天检测通过数量：{passNum}")
+    log.info(f"成功存储excel数量：{passNum}")
 
 
-# 每天（有空）执行检测
-if __name__ == "__main__":
-    
-    #print(get_stock_pe('600519'))
+def detect_with_allPE(path: str):
+    my_select=path
 
-    my_select=r"..\input\selectlist_my.xlsx"
-    #是否检测自选True/False
-    ISMY = True
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
-    IS_MYSQL = True
+    log.info(f"是否检测自选标的：{ISMY}")
+    log.info(f"是否从数据库获取PE信息：{IS_MYSQL}")
 
-    print(f"是否检测自选标的：{ISMY}")
-    print(f"是否从数据库获取PE信息：{IS_MYSQL}")
+    #选定标的
+    if ISMY:
+        test_stocks = get_select_stocks(my_select)
+    else:
+        test_stocks = get_select_stocks()
+
+    N_YEARS = 3
+    result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
+    write_df = getPE_after_detect(result,test_stocks)
+
+    end_date = datetime.now().strftime("%Y%m%d")
+    if ISMY:
+        filename = f'.\output\detect\detect_rev_allPE_{end_date}_my.xlsx'
+    else:
+        filename = f'.\output\detect\detect_rev_allPE_{end_date}.xlsx'
+
+    log.info(f"检查成功检测数：{len(write_df)}")
+
+    save_to_excel(write_df,test_stocks,filename)
+
+
+def detect_with_lastPE(path: str):
+
+    my_select=path
+
+    log.info(f"是否检测自选标的：{ISMY}")
+    log.info(f"是否从数据库获取PE信息：{IS_MYSQL}")
     
     #选定标的
     if ISMY:
@@ -347,12 +465,54 @@ if __name__ == "__main__":
     result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
     end_date = datetime.now().strftime("%Y%m%d")
     if ISMY:
-        filename = f'.\output\detect\detect_volume_reversal{end_date}_my.xlsx'
+        filename = f'.\output\detect\detect_rev_lastPE_{end_date}_my.xlsx'
     else:
-        filename = f'.\output\detect\detect_volume_reversal{end_date}.xlsx'
+        filename = f'.\output\detect\detect_rev_lastPE_{end_date}.xlsx'
     
-    print(f"检查成功检测数：{len(result)}")
+    log.info(f"检查成功检测数：{len(result)}")
+
     save_to_excel_filter(result,test_stocks,filename)
+
+
+# 每天（有空）执行检测
+if __name__ == "__main__":
+
+    my_select=r"..\input\selectlist_my.xlsx"
+    #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
+    IS_MYSQL = True
+    #是否检测自选True/False
+    ISMY = True
+
+    detect_with_allPE(my_select)
+    #detect_with_lastPE(my_select)
+
+    #my_select=r"..\input\selectlist_my.xlsx"
+    ##是否检测自选True/False
+    #ISMY = True
+    ##PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
+    #IS_MYSQL = True
+
+    #print(f"是否检测自选标的：{ISMY}")
+    #print(f"是否从数据库获取PE信息：{IS_MYSQL}")
+    
+    ##选定标的
+    #if ISMY:
+    #    test_stocks = get_select_stocks(my_select)
+    #else:
+    #    test_stocks = get_select_stocks() 
+
+    ## 执行检测 选取start_date开始日期数据，n_year内通过股价，交易额分位进行情绪判断买点，并给出标的和行业的估值参考
+    ##result = detect_price_volume_reversal(test_stocks, start_date = "20230501", n_years=1) 
+    #N_YEARS = 3
+    #result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
+    #end_date = datetime.now().strftime("%Y%m%d")
+    #if ISMY:
+    #    filename = f'.\output\detect\detect_volume_reversal{end_date}_my.xlsx'
+    #else:
+    #    filename = f'.\output\detect\detect_volume_reversal{end_date}.xlsx'
+    
+    #print(f"检查成功检测数：{len(result)}")
+    #save_to_excel_filter(result,test_stocks,filename)
 
 
 

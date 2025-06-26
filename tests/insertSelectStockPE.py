@@ -14,6 +14,8 @@ MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 SELECT_PATH=r"..\input\selectlist.xlsx"
 
+CHUNK_NUM = 1# 分块数量处理设置
+
 INSERT_SQL ="""
     INSERT IGNORE INTO `stock_pe_history` 
     (`stock_code`,`stock_name`,`trade_date`, `pe`, `pe_ttm`, `pb`, `dv_ratio`, `dv_ttm`, `ps`, `ps_ttm`, `total_mv`)
@@ -30,9 +32,9 @@ def insertSelectStockPE(path = SELECT_PATH):
 
     # 分块处理设置[2,3](@ref)
     total_rows = len(df_stock)
-    chunk_num = 1
-    chunk_indices = np.array_split(np.arange(total_rows), chunk_num)
-    log.info(f"分块处理设置总记录数total_rows={total_rows}；块数chunk_num={chunk_num}，每块记录数chunk_indices={len(chunk_indices[0])}")
+    
+    chunk_indices = np.array_split(np.arange(total_rows), CHUNK_NUM)
+    log.info(f"分块处理设置总记录数total_rows={total_rows}；块数CHUNK_NUM={CHUNK_NUM}，每块记录数chunk_indices={len(chunk_indices[0])}")
     df_result = pd.DataFrame(columns=['stock_code','stock_name','trade_date','pe','pe_ttm','pb', 'dv_ratio', 'dv_ttm', 'ps', 'ps_ttm', 'total_mv'])
         
 

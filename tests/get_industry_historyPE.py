@@ -2,7 +2,25 @@ import akshare as ak
 import numpy as np
 import pandas as pd
 from check_historical_year_pe import get_historical_year_pe
+from typing import Tuple, Dict, Any, Optional
+import pymysql
 from datetime import datetime
+import log4ak
+
+
+log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
+
+
+# 数据库配置（适配PyMySQL参数）
+DB_CONFIG = {
+    'host': 'localhost',
+    'user': 'powerbi',
+    'password': 'longyu',
+    'database': 'akshare',
+    'port': 3306,
+    'charset': 'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor
+}
 
 
 def get_industry_info(stock_code: str) -> pd.DataFrame:
@@ -50,13 +68,13 @@ def get_industry_info(stock_code: str) -> pd.DataFrame:
         return latest_record[['证券代码', '行业编码', '行业门类', '行业大类']]
         
     except KeyError as e:
-        print(f"字段缺失异常: {str(e)}")
+        log.error(f"字段缺失异常: {str(e)}")
         return pd.DataFrame()
     except IndexError:
-        print(f"未找到股票代码 {stock_code} 对应的行业")
+        log.error(f"未找到股票代码 {stock_code} 对应的行业")
         return pd.DataFrame()
     except Exception as e:
-        print(f"申银万国行业分类查询失败: {str(e)}")
+        log.error(f"申银万国行业分类查询失败: {str(e)}")
         return pd.DataFrame()
 
 
@@ -100,13 +118,13 @@ def get_sw_industry_pe_history(symbol="I64", start_year="2023"):
                     results.append(industry_data[["日期","行业编码","PE静-加权","PE静-中位","PE静-平均"]])
                     
             except Exception as e:
-                print(f"{year}年数据获取失败: {str(e)}")
+                log.error(f"{year}年数据获取失败: {str(e)}")
                 continue
         
         return pd.concat(results).reset_index(drop=True) if results else pd.DataFrame()
     
     except Exception as e:
-        print(f"主程序异常: {str(e)}")
+        log.error(f"主程序异常: {str(e)}")
         return pd.DataFrame()
 
 def get_stock_industry_valuation(stock_code, start_year="2023"):
@@ -126,6 +144,154 @@ def get_stock_industry_valuation(stock_code, start_year="2023"):
     
     return industry, valuation_df#, stockPE
 
+def get_industry_pe_mysql_new_conn(industry_code: str) -> pd.DataFrame:
+    """
+    从MySQL数据库获取行业的历史PE数据
+    
+    参数:
+        conn: 数据库连接对象
+        industry_code: 行业代码
+    
+    返回:
+        包含行业历史PE数据的DataFrame
+    """
+
+    conn = pymysql.connect(**DB_CONFIG)
+    try:
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT 
+                    trade_date AS `日期`,
+                    pe_weighted AS `PE静-加权`,
+                    pe_median AS `PE静-中位`,
+                    pe_mean AS `PE静-平均`
+                FROM industry_pe_history
+                WHERE industry_code = %s
+                ORDER BY trade_date ASC
+            """
+            cursor.execute(sql, (industry_code,))
+            results = cursor.fetchall()
+            
+            if not results:
+                log.error(f"未找到行业 {industry_code} 的PE历史数据")
+                return pd.DataFrame()
+            
+            # 转换为DataFrame
+            df = pd.DataFrame(results)
+            df['日期'] = pd.to_datetime(df['日期'])
+            df.set_index('日期', inplace=True)
+            log.info(f"找到行业 {industry_code} 的PE历史数据{len(df)}条")
+            return df
+    
+    except Exception as e:
+        log.error(f"获取行业PE历史数据失败: {e}")
+        return pd.DataFrame()
+    finally:
+        conn.close()
+
+def get_industry_pe_mysql(industry_code: str,conn) -> pd.DataFrame:
+    """
+    从MySQL数据库获取行业的历史PE数据
+    
+    参数:
+        conn: 数据库连接对象
+        industry_code: 行业代码
+    
+    返回:
+        包含行业历史PE数据的DataFrame
+    """
+    try:
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT 
+                    trade_date,
+                    pe_weighted AS `PE静-加权`,
+                    pe_median AS `PE静-中位`,
+                    pe_mean AS `PE静-平均`
+                FROM industry_pe_history
+                WHERE industry_code = %s
+                ORDER BY trade_date ASC
+            """
+            cursor.execute(sql, (industry_code,))
+            results = cursor.fetchall()
+            
+            if not results:
+                log.error(f"未找到行业 {industry_code} 的PE历史数据")
+                return pd.DataFrame()
+            
+            # 转换为DataFrame
+            df = pd.DataFrame(results)
+            df['trade_date'] = pd.to_datetime(df['trade_date'])
+            df.set_index('trade_date', inplace=True)
+            
+            return df
+    
+    except Exception as e:
+        log.error(f"获取行业PE历史数据失败: {e}")
+        return pd.DataFrame()
+
+def get_stock_industry_pe_mysql(stock_code: str) -> Dict[str, Any]:
+    """
+    一站式获取股票对应的行业及其历史PE数据（数据库版）
+    
+    参数:
+        stock_code: 6位股票代码
+    
+    返回:
+        包含股票信息和行业历史PE数据的字典
+    """
+    # 标准化股票代码
+    stock_code = f"{stock_code:0>6}"
+    
+    result = {
+        "status": "success",
+        "code": stock_code,
+        "industry_info": None,
+        "pe_history": pd.DataFrame(),
+        "message": ""
+    }
+    
+    try:
+        # 连接数据库
+        conn = pymysql.connect(**DB_CONFIG)
+        
+        # 1. 获取股票行业信息
+        industry_info = get_industry_info(stock_code)
+        if industry_info.empty:
+            result.update({
+                "status": "error",
+                "message": "未找到行业分类信息"
+            })
+            return result
+            
+        result["industry_info"] = industry_info
+        
+        # 2. 获取行业历史PE
+        pe_history = get_industry_pe_mysql(industry_info['行业编码'].values[0], conn)
+        result["pe_history"] = pe_history
+        
+        # 添加统计信息
+        if not pe_history.empty:
+            last_record = pe_history.iloc[-1].to_dict()
+            result.update({
+                "latest_pe_weighted": last_record['PE静-加权'],
+                "latest_pe_median": last_record['PE静-中位'],
+                "years_of_data": pe_history.index.year.nunique(),
+                "min_pe_median": pe_history['PE静-中位'].min(),
+                "max_pe_median": pe_history['PE静-中位'].max(),
+                "current_pe_percentile": (pe_history['PE静-中位'] <= last_record['PE静-中位']).mean()
+            })
+        
+        conn.close()
+        return result
+        
+    except Exception as e:
+        log.error(f"一站式查询失败: {e}")
+        return {
+            "status": "error",
+            "code": stock_code,
+            "message": f"数据库操作失败: {str(e)}"
+        }
 
 
 def df_to_excel(df):
@@ -139,6 +305,24 @@ def df_to_excel(df):
         #        worksheet.set_column(idx, idx, 20)  # 设置列宽为20字符
     return 
 
+def test_get_stock_industry_pe_mysql() -> None:
+    # 测试获取行业PE历史数据
+    print("\n测试1: 获取贵州茅台行业历史PE")
+    result_600519 = get_stock_industry_pe_mysql("600519")
+    print(f"状态: {result_600519['status']}")
+    print(f"行业信息: {result_600519['industry_info']}")
+    print(f"PE历史数据样本:\n{result_600519['pe_history'].head(3) if not result_600519['pe_history'].empty else '无数据'}")
+    
+    print("\n测试2: 获取宁德时代行业历史PE")
+    result_300750 = get_stock_industry_pe_mysql("300750")
+    print(f"状态: {result_300750['status']}")
+    print(f"行业信息: {result_300750['industry_info']}")
+    print(f"PE历史数据条数: {len(result_300750['pe_history'])}")
+    
+    print("\n测试3: 无效股票代码")
+    result_invalid = get_stock_industry_pe_mysql("999999")
+    print(f"状态: {result_invalid['status']}")
+    print(f"消息: {result_invalid['message']}")
 
 if __name__ == "__main__":
     # 示例：查询贵州茅台行业
@@ -146,10 +330,12 @@ if __name__ == "__main__":
     #df = ak.stock_industry_pe_ratio_cninfo("证监会行业分类","20241223")
     #df_to_excel(df)
 
+    test_get_stock_industry_pe_mysql()
 
-    df = get_stock_industry_valuation("000858")
+
+    #df = get_stock_industry_valuation("000858")
     
-    print(f"{df}")
+    #print(f"{df}")
 
 
     #industry, valuation_data = get_stock_industry_valuation("600519")

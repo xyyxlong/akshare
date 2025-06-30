@@ -1,8 +1,32 @@
-2025-06-19 15:20:28 | ERROR    | log4ak.py:128 - 错误信息
-2025-06-19 15:21:07 | ERROR    | log4ak.py:128 - 错误信息
-2025-06-19 15:21:36 | ERROR    | log4ak.py:128 - 错误信息
-2025-06-19 15:22:25 | ERROR    | log4ak.py:128 - 错误信息
-2025-06-19 15:26:43 | ERROR    | log4ak.py:128 - 错误信息
-2025-06-19 15:31:14 | ERROR    | log4ak.py:128 - 错误信息
-2025-06-19 15:42:22 | ERROR    | log4ak.py:131 - 错误信息
-2025-06-19 15:42:58 | ERROR    | log4ak.py:131 - 错误信息
+2025-06-30 17:29:32 | ERROR    | log4ak.py:128 - 股票000568在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:34 | ERROR    | log4ak.py:128 - 股票000596在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:35 | ERROR    | log4ak.py:128 - 股票000820在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:37 | ERROR    | log4ak.py:128 - 股票000858在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:38 | ERROR    | log4ak.py:128 - 股票000983在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:40 | ERROR    | log4ak.py:128 - 股票002088在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:41 | ERROR    | log4ak.py:128 - 股票002304在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:43 | ERROR    | log4ak.py:128 - 股票002372在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:44 | ERROR    | log4ak.py:128 - 股票002557在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:45 | ERROR    | log4ak.py:128 - 股票002572在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:47 | ERROR    | log4ak.py:128 - 股票002737在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:48 | ERROR    | log4ak.py:128 - 股票002832在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:50 | ERROR    | log4ak.py:128 - 股票300122在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:51 | ERROR    | log4ak.py:128 - 字段缺失异常: '变更日期'
+2025-06-30 17:29:51 | ERROR    | log4ak.py:128 - 300630获取行业或股票估值异常: '行业编码'
+2025-06-30 17:29:52 | ERROR    | log4ak.py:128 - 股票300760在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:54 | ERROR    | log4ak.py:128 - 股票600132在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:55 | ERROR    | log4ak.py:128 - 股票600188在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:57 | ERROR    | log4ak.py:128 - 股票600309在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:29:59 | ERROR    | log4ak.py:128 - 股票600426在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:00 | ERROR    | log4ak.py:128 - 股票600436在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:03 | ERROR    | log4ak.py:128 - 股票600438在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:05 | ERROR    | log4ak.py:128 - 股票600546在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:06 | ERROR    | log4ak.py:128 - 股票600845在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:09 | ERROR    | log4ak.py:128 - 股票601636在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:11 | ERROR    | log4ak.py:128 - 股票601666在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:12 | ERROR    | log4ak.py:128 - 股票601888在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:14 | ERROR    | log4ak.py:128 - 股票603198在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:15 | ERROR    | log4ak.py:128 - 股票603589在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 17:30:17 | ERROR    | log4ak.py:128 - 股票603801在数据库中无有效数据,通过_get_from_akshare获取数据
+2025-06-30 19:34:19 | ERROR    | log4ak.py:128 - 字段缺失异常: '变更日期'
+2025-06-30 19:34:19 | ERROR    | log4ak.py:128 - 300630获取行业或股票估值异常: '行业编码'

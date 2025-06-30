@@ -85,7 +85,7 @@ def get_stock_pe_his(stock_code: str) -> pd.DataFrame:
                 #    df['pe'] = df['pe'].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
                 #    df['pe_ttm'] = df['pe_ttm'].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
                 
-                log.info(f"{stock_code}获取到 {len(df)} 条历史PE数据")
+                log.info(f"{stock_code}从数据库获取到 {len(df)} 条历史PE数据")
                 return df
             
     except pymysql.Error as dberr:
@@ -183,7 +183,7 @@ def _fetch_pe_calculation(conn, code, target_date, start_date):
     """核心查询计算(MySQL严格模式兼容)"""
     cursor = conn.cursor()
     cursor.execute(SELECT_SQL, (code, target_date, code, start_date, target_date))
-    log.info(f"成功执行SQL：{SELECT_SQL}")
+    log.debug(f"成功执行SQL：{SELECT_SQL}")
     
     return cursor.fetchone()
 

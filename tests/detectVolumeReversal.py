@@ -78,6 +78,8 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
             hist_data['vg_mask'] = hist_data['v_growth'].rolling(KEEPDAY).apply(lambda x: np.mean(x >= (1+DODUP)))==1
             
             result.append(hist_data)
+
+            log.info(f"{code}量价分位分析完毕，已完成{len(result)}个分析处理。")
             #if len(result) == 0:
             #    result = hist_data.copy()
             #else:
@@ -368,9 +370,12 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
 
 
                 last_index = df.index[-1]  # 获取最后一行索引
+                
                 if IS_MYSQL:
                     #通过数据库查询PE
-                    stockPE = gs.get_stock_pe_percentile(code, N_YEARS,last_index)
+                    log.info(f"通过数据库库获取{code}最后一天的PE数据。")
+                    stockPE = gs.get_stock_pe_percentile(code, N_YEARS)#不带入df的最新日期last_index，而是使用数据库中最新的日期。
+                    #stockPE = gs.get_stock_pe_percentile(code, N_YEARS,last_index)
                     stock_pe = stockPE['pe']
                     stock_pe_ttm = stockPE['pe_ttm']
                     stock_pe_percentile = stockPE['percentile']
@@ -481,10 +486,10 @@ if __name__ == "__main__":
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False
-    ISMY = True
+    ISMY = False
 
-    detect_with_allPE(my_select)
-    #detect_with_lastPE(my_select)
+    #detect_with_allPE(my_select)
+    detect_with_lastPE(my_select)
 
     #my_select=r"..\input\selectlist_my.xlsx"
     ##是否检测自选True/False

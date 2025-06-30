@@ -452,7 +452,7 @@ def test_portfolio_simulator() -> pd.DataFrame:
         simulator.buy_stock(code, buydate, amount_100)
     
     # 运行回测
-    end_date = "20250616"
+    end_date = "20250626"
     results = simulator.run_backtest(end_date)
     
     # 保存结果

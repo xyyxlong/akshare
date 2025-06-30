@@ -14,7 +14,7 @@ MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 SELECT_PATH=r"..\input\selectlist.xlsx"
 
-CHUNK_NUM = 1# 分块数量处理设置
+CHUNK_NUM = 3# 分块数量处理设置
 
 INSERT_SQL ="""
     INSERT IGNORE INTO `stock_pe_history` 
@@ -36,10 +36,12 @@ def insertSelectStockPE(path = SELECT_PATH):
     chunk_indices = np.array_split(np.arange(total_rows), CHUNK_NUM)
     log.info(f"分块处理设置总记录数total_rows={total_rows}；块数CHUNK_NUM={CHUNK_NUM}，每块记录数chunk_indices={len(chunk_indices[0])}")
     df_result = pd.DataFrame(columns=['stock_code','stock_name','trade_date','pe','pe_ttm','pb', 'dv_ratio', 'dv_ttm', 'ps', 'ps_ttm', 'total_mv'])
-        
-
+      
+    # 直接存储处理后的元组列表
+    batch_data = []
     # 初始化错误计数器（放在循环体外层）
-    error_count = 0  # 连续错误计数器    
+    error_count = 0  # 连续错误计数器   
+    
 
     # 分批处理逻辑
     for file_num, chunk_idx in enumerate(chunk_indices):
@@ -66,9 +68,10 @@ def insertSelectStockPE(path = SELECT_PATH):
                     'stock_name': r_name
                     })
 
-                #数据合并
-                df_result = pd.concat([df_result, dfpe], ignore_index=True)
-                log.info(f"df_result数据块合并后大小为:{len(df_result)}")
+                # 直接处理PE数据并添加到batch_data
+                for _, pe_row in dfpe.iterrows():
+                    processed_row = process_pe_data(pe_row)
+                    batch_data.append(processed_row)
 
                 error_count = 0  # 成功执行后重置计数器[6](@ref)
                 log.info(f"功执行后重置计数器error_count={error_count}")
@@ -96,25 +99,31 @@ def insertSelectStockPE(path = SELECT_PATH):
 
         log.info(f"第{file_num+1}批数据已获取，包含{len(df_result)}条记录")
 
-    # 生成批量数据（需要根据具体存储表来修改代码）
-    batch_data = [
-                (row['stock_code'],row['stock_name'],row['trade_date'],
-                    None if pd.isna(row['pe']) else float(row['pe']),
-                    None if pd.isna(row['pe_ttm']) else float(row['pe_ttm']),
-                    None if pd.isna(row['pb']) else float(row['pb']),                         
-                    None if pd.isna(row['dv_ratio']) else float(row['dv_ratio']),
-                    None if pd.isna(row['dv_ttm']) else float(row['dv_ttm']),
-                    None if pd.isna(row['ps']) else float(row['ps']),
-                    None if pd.isna(row['ps_ttm']) else float(row['ps_ttm']),
-                    None if pd.isna(row['total_mv']) else float(row['total_mv']))
-                for _, row in df_result.iterrows()
-                ]
-    log.info(f"所有数据已获取，并封装为{len(batch_data)}条记录")
 
-    ins.insert_to_mysql(batch_data,INSERT_SQL)
-    #ins.insert_to_mysql(dfpe,INSERT_SQL)
+
+    # 所有数据处理完成后插入数据库
+    log.info(f"所有数据已处理完成，共{len(batch_data)}条记录")
+    ins.insert_to_mysql(batch_data, INSERT_SQL)
+
     return "所有分块处理完成"
 
+def process_pe_data(row):
+    """
+    处理单行PE数据，将NaN转换为None
+    """
+    return (
+        row['stock_code'],
+        row['stock_name'],
+        row['trade_date'],
+        None if pd.isna(row['pe']) else float(row['pe']),
+        None if pd.isna(row['pe_ttm']) else float(row['pe_ttm']),
+        None if pd.isna(row['pb']) else float(row['pb']),
+        None if pd.isna(row['dv_ratio']) else float(row['dv_ratio']),
+        None if pd.isna(row['dv_ttm']) else float(row['dv_ttm']),
+        None if pd.isna(row['ps']) else float(row['ps']),
+        None if pd.isna(row['ps_ttm']) else float(row['ps_ttm']),
+        None if pd.isna(row['total_mv']) else float(row['total_mv'])
+    )
 
 
 def get_pe_condition(stock_code="601398"):

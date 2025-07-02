@@ -20,14 +20,17 @@ GROUNDVOLUME = 0.05 #地价地量阈值检测时间内5%分位
 
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
-ISMY = False
+N_YEARS = 3  #回测N_YEARS年百分位
+START_DATE = "20160501" #回测开始日期
 
-N_YEARS = 3
-IS_MYSQL = True
+ISMY = False#是否检测自选True/False
+IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
+IS_BUY = False#是否直接返回量价买点
+
 
 def detect_price_volume_reversal(stock_list: pd.DataFrame, 
                           start_date: str = "20200101", 
-                          n_years: int = 3) -> list:
+                          n_years: int = N_YEARS) -> list:
     """
     地量地价反转信号检测函数
     
@@ -42,7 +45,8 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
     """
     # 初始化结果容器
     result = []
-    
+    signals_list = []  # 存储检测到的信号[2,9](@ref)
+
     # 获取当前日期
     #today = datetime.now().strftime("%Y%m%d") # 当前日期
     
@@ -80,33 +84,133 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
             result.append(hist_data)
 
             log.info(f"{code}量价分位分析完毕，已完成{len(result)}个分析处理。")
-            #if len(result) == 0:
-            #    result = hist_data.copy()
-            #else:
-            #    result.append(hist_data)
 
-            # 生成信号（网页3/9的反转确认逻辑）
-            #signal_dates = hist_data[hist_data['low_volume_mask'] & hist_data['consecutive_growth']].index
+            if IS_BUY:
+
+                signals_list.extend(test_buy_signals(code,hist_data))
+
+                ## ==== 新增：检测连续5天量价信号 ====
+                ## 创建同时满足条件的掩码
+                #hist_data['both_mask'] = hist_data['p_mask'] & hist_data['v_mask']
+
+                ## 生成连续区块标识
+                #hist_data['block_id'] = (hist_data['both_mask'] != hist_data['both_mask'].shift(1)).cumsum()
             
-            #if len(signal_dates) > 0:
-            #    first_signal = signal_dates[0]
-            #    reversal_data = {
-            #        "代码": code,
-            #        "名称": name,
-            #        "地量日期": hist_data[low_volume_mask].index[-1].strftime("%Y%m%d"),
-            #        "反转日期": first_signal.strftime("%Y%m%d"),
-            #        "量能变化率(%)": round((
-            #            hist_data.loc[first_signal, '成交额'] / 
-            #            hist_data[low_volume_mask]['成交额'].mean()) * 100, 2)
-            #    }
-            #    result.append(reversal_data)
+                ## 检测连续5天满足条件[7](@ref)
+                #consecutive_mask = (
+                #    hist_data['both_mask']
+                #    .rolling(window=5)
+                #    .apply(lambda x: np.all(x), raw=False)
+                #)
+            
+                ## 提取满足条件的日期和价格
+                #consecutive_dates = consecutive_mask[consecutive_mask == True].index
+
+                ## 按区块分组，只取每组第一个信号（关键去重逻辑）
+                ## 重新获取不复权的价格
+                #current_block = -1                
+                #for date in consecutive_dates:
+                #    block_id = hist_data.loc[date, 'block_id']
+                #    # 新区块的第一个信号
+                #    if block_id != current_block:  
+                #        price = hist_data.loc[date, '收盘']
+                #        signals_list.append({
+                #            'A股代码': code,
+                #            'buydate': date,
+                #            'price': price
+                #        })
+                #        current_block = block_id  # 更新当前区块
+                #        log.info(f"ok 新增信号 @ {date} (区块:{block_id})")
+                #    else:
+                #        log.info(f"pass 跳过连续信号 @ {date} (同区块:{block_id})")
+                ## ===== 新增部分结束 =====
+
             time.sleep(0.3)        
         except Exception as e:
             log.error(f"股票{code}数据处理异常: {str(e)}")
             time.sleep(0.3) 
             continue
-            
-    return result
+
+
+    # 如果检测买点，就返回买入信号列表
+    if IS_BUY and signals_list:
+        return signals_list
+    else:
+        #否则返回正常检测列表
+        return result
+    
+def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list: 
+    """
+    检测买点信号
+    1，​区块化处理​：通过block_id将连续信号分组，避免重复检测
+    ​2，终点标记法​：滚动窗口检测会标记连续区间的结束点（第5/6/7...天）
+    ​3，首次触发原则​：每个连续信号区间只取第一个有效信号
+    参数：
+        code：str 股票代码
+        hist_data : 股票历史价格和交易额数据
+    
+    返回：
+        signals_list，满足买点信号条件的list[代码，日期，价格]
+    """
+   # 初始化信号存储和过滤条件
+    signals_list = []
+    last_valid_signal_date = None
+    MIN_DAYS_BETWEEN_SIGNALS = 30
+    excluded_early_signals = 0
+    MAX_EARLY_SIGNALS_TO_EXCLUDE = 2
+
+    # 创建联合条件掩码
+    hist_data['both_mask'] = hist_data['p_mask'] & hist_data['v_mask']
+
+    # 生成连续区块标识
+    hist_data['block_id'] = (hist_data['both_mask'] != hist_data['both_mask'].shift(1)).cumsum()
+
+    # 检测连续5天满足条件
+    consecutive_mask = (
+        hist_data['both_mask']
+        .rolling(window=5)
+        .apply(lambda x: np.all(x), raw=False)
+    )
+
+    # 提取满足条件的日期和价格
+    consecutive_dates = consecutive_mask[consecutive_mask == True].index
+
+    # 按区块分组处理信号
+    current_block = -1
+    for date in consecutive_dates:
+        block_id = hist_data.loc[date, 'block_id']
+    
+        # 条件1：跳过前两次信号
+        if excluded_early_signals < MAX_EARLY_SIGNALS_TO_EXCLUDE:
+            excluded_early_signals += 1
+            log.info(f"{code}排除早期信号 #{excluded_early_signals} @ {date}")
+            continue
+        
+        # 条件2：检查30天内是否已有有效信号
+        if last_valid_signal_date is not None:
+            days_since_last = (date - last_valid_signal_date).days
+            if days_since_last < MIN_DAYS_BETWEEN_SIGNALS:
+                log.info(f"{code}跳过30天内重复信号 @ {date} (上次信号:{last_valid_signal_date})")
+                continue
+    
+        # 新区块的第一个信号
+        if block_id != current_block:
+            price = hist_data.loc[date, '收盘']
+        
+            # 记录有效信号
+            signals_list.append({
+                'A股代码': code,
+                'buydate': date,
+                'price': price
+            })
+            last_valid_signal_date = date
+            current_block = block_id
+        
+            log.info(f"ok {code}有效信号 @ {date} (区块:{block_id})")
+        else:
+            log.info(f"pass {code}同区块跳过 @ {date}")
+    return signals_list
+
 
 
 def get_stock_data(code: str, start_date: str) -> pd.DataFrame:
@@ -289,17 +393,25 @@ def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None
     # 写入Excel
     try:
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-            for sheet_name, df in result:
-                df.to_excel(writer, sheet_name=sheet_name, index=True)
-                passNum += 1
+
+            if IS_BUY:
+                df = pd.DataFrame(result,index = None)
+                df['buydate'] = pd.to_datetime(df['buydate']).dt.strftime('%Y%m%d')
+                df.to_excel(writer, sheet_name="信号列表", index=False)
+                log.info(f"成功存储买点信号列表excel，数量{len(result)}")      
+                return
+
             # 若所有Sheet均被过滤，添加默认Sheet
             if len(writer.sheets) == 0:
                 pd.DataFrame(["无符合条件的数据"]).to_excel(writer, sheet_name="Empty")
+            for sheet_name, df in result:
+                df.to_excel(writer, sheet_name=sheet_name, index=True)
+                passNum += 1
+
+            log.info(f"成功存储excel数量：{passNum}")           
         
     except PermissionError:
         log.error(f"错误：文件 {filename} 被其他程序占用，请关闭后重试")
-
-    log.info(f"成功存储excel数量：{passNum}")
 
 
     #with pd.ExcelWriter(filename, engine='openpyxl') as writer:
@@ -374,7 +486,7 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 if IS_MYSQL:
                     #通过数据库查询PE
                     log.info(f"通过数据库库获取{code}最后一天的PE数据。")
-                    stockPE = gs.get_stock_pe_percentile(code, N_YEARS)#不带入df的最新日期last_index，而是使用数据库中最新的日期。
+                    stockPE = gs.get_stock_pe_percentile(code, N_YEARS)#回测N_YEARS年百分位，不带入df的最新日期last_index，而是使用数据库中最新的日期。
                     #stockPE = gs.get_stock_pe_percentile(code, N_YEARS,last_index)
                     stock_pe = stockPE['pe']
                     stock_pe_ttm = stockPE['pe_ttm']
@@ -395,7 +507,10 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 df.loc[last_index, 'percentile'] = stock_pe_percentile
                 sheets_to_write.append((str(code), df))
 
+                
+
                 passNum += 1
+                log.info(f"{code}数据成功存入excel，sheet{passNum}")
                 time.sleep(0.3) 
             
         except Exception as e:
@@ -424,6 +539,9 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
 
 
 def detect_with_allPE(path: str):
+    """
+    检测所选输入文件，返回检测结果以及所有交易日标的以及所属行业的PE
+    """
     my_select=path
 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
@@ -436,8 +554,7 @@ def detect_with_allPE(path: str):
     else:
         test_stocks = get_select_stocks()
 
-    N_YEARS = 3
-    result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
+    result = detect_price_volume_reversal(test_stocks, start_date = START_DATE, n_years = N_YEARS)
     write_df = getPE_after_detect(result,test_stocks)
 
     end_date = datetime.now().strftime("%Y%m%d")
@@ -452,7 +569,9 @@ def detect_with_allPE(path: str):
 
 
 def detect_with_lastPE(path: str):
-
+    """
+    检测所选输入文件，返回检测结果以及最新交易日标的PE百分位以及所属行业的PE
+    """
     my_select=path
 
     log.info(f"是否检测自选标的：{ISMY}")
@@ -466,8 +585,8 @@ def detect_with_lastPE(path: str):
 
     # 执行检测 选取start_date开始日期数据，n_year内通过股价，交易额分位进行情绪判断买点，并给出标的和行业的估值参考
     #result = detect_price_volume_reversal(test_stocks, start_date = "20230501", n_years=1) 
-    N_YEARS = 3
-    result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
+
+    result = detect_price_volume_reversal(test_stocks, start_date = START_DATE, n_years = N_YEARS)
     end_date = datetime.now().strftime("%Y%m%d")
     if ISMY:
         filename = f'.\output\detect\detect_rev_lastPE_{end_date}_my.xlsx'
@@ -478,18 +597,61 @@ def detect_with_lastPE(path: str):
 
     save_to_excel_filter(result,test_stocks,filename)
 
+def detect_with_buy(path: str):
+    """
+    检测所选输入文件，返回买点检测信息
+    """
+
+    log.info(f"是否检测买点：{IS_BUY}")
+    if not IS_BUY:
+        log.info(f"不检测买点，直接结束返回")
+        return
+
+    my_select=path
+
+    #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
+    log.info(f"是否检测自选标的：{ISMY}")
+    log.info(f"是否从数据库获取PE信息：{IS_MYSQL}")
+
+
+    #选定标的
+    if ISMY:
+        test_stocks = get_select_stocks(my_select)
+    else:
+        test_stocks = get_select_stocks()
+
+    result = detect_price_volume_reversal(test_stocks, start_date = START_DATE, n_years = N_YEARS)
+
+    end_date = datetime.now().strftime("%Y%m%d")
+    if ISMY:
+        filename = f'.\output\detect\detect_rev_BUY_{end_date}_my.xlsx'
+    else:
+        filename = f'.\output\detect\detect_rev_BUY_{end_date}.xlsx'
+
+    log.info(f"检查成功检测数：{len(result)}")
+
+    save_to_excel(result,test_stocks,filename)
 
 # 每天（有空）执行检测
 if __name__ == "__main__":
-
+    #自选文件
     my_select=r"..\input\selectlist_my.xlsx"
+    #回测N_YEARS年百分位
+    N_YEARS = 3  
+    #回测开始日期
+    START_DATE = "20160501" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False
     ISMY = False
+    #是否检测买点
+    IS_BUY = True
+
+
 
     #detect_with_allPE(my_select)
-    detect_with_lastPE(my_select)
+    #detect_with_lastPE(my_select)
+    detect_with_buy(my_select)
 
     #my_select=r"..\input\selectlist_my.xlsx"
     ##是否检测自选True/False

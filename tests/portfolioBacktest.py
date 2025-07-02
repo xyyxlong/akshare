@@ -5,10 +5,10 @@ import log4ak
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Union, Any, Optional
 import math
+import time
 
 # 日志配置
 log = log4ak.LogManager(log_level=log4ak.INFO)
-
 
 
 class PositionTracker:
@@ -137,6 +137,12 @@ class PortfolioSimulator:
         # 新增：待处理订单列表[3](@ref)
         self.pending_orders = [] 
 
+        #akshare接口连续失败调用的上限以及失败次数记录
+        self.MAX_TRYTIMES = 3
+        self.AK_TRYTIME = 0
+        #akshare接口调用失败的休眠时间
+        self.AK_TRY_FAILD_SLEEPTIME = 60
+
         log.info(f"组合初始化: 起始资金{initial_cash:.2f}元, 开始日期{start_date}")
 
     def _cache_stock_data(
@@ -169,8 +175,10 @@ class PortfolioSimulator:
         """预加载所有股票的分红数据"""
         for code in codes:
             if code not in self.dividend_cache:
+                self.AK_TRYTIME=0
                 self.dividend_cache[code] = self._get_dividend_data(code)
                 log.info(f"预加载{code}分红数据: {len(self.dividend_cache[code])}条记录")
+                time.sleep(1) 
 
 
     def _get_trading_calendar(self, start_date: str) -> List[str]:
@@ -179,22 +187,26 @@ class PortfolioSimulator:
         trade_dates['trade_date'] = pd.to_datetime(trade_dates['trade_date'])
         return trade_dates[trade_dates['trade_date'] >= pd.to_datetime(start_date)]['trade_date'].dt.strftime('%Y%m%d').tolist()
     
-    def buy_stock(self, code: str, buy_date: str, shares: int) -> bool:
+    def buy_stock(self, code: str, buy_date: str, buymoney: float) -> bool:
         """买入下单处理，仅记录订单，不立即扣款"""
         if any(order[0] == code for order in self.pending_orders):
             log.error(f"{code}已有待处理订单")
             return False
             
-        self.pending_orders.append((code, buy_date, shares))
+        self.pending_orders.append((code, buy_date, buymoney))
 
-        ##初始化创建持仓
-        position = PositionTracker(
-            code, self.start_date, 0, # 初始数量设为0
-            self.buy_fee, self.dividend_tax,
-            0  # 初始价格设为0
-        )
-        self.positions[code] = position
-        log.info(f"登记买入订单: {buy_date}买入{code} {shares}股")
+        if (self.positions is None or 
+        not isinstance(self.positions, dict) or 
+        code not in self.positions or 
+        self.positions[code] is None):
+            ##初始化创建持仓
+            position = PositionTracker(
+                code, self.start_date, 0, # 初始数量设为0
+                self.buy_fee, self.dividend_tax,
+                0  # 初始价格设为0
+            )
+            self.positions[code] = position
+        log.info(f"登记买入订单: {buy_date}买入{code} 购买资金{buymoney}")
         return True
 
     def process_pending_orders(self, current_date: str) -> None:
@@ -208,7 +220,7 @@ class PortfolioSimulator:
         #强制日期格式转换
 
         for order in self.pending_orders:
-            code, buy_date, shares = order
+            code, buy_date, buymoney = order
             if current_date != buy_date:
                 continue
                 
@@ -224,7 +236,9 @@ class PortfolioSimulator:
                 actual_price = close_price * (1 + self.buy_fee)
                 
                 # 计算成本
-                cost = shares * actual_price
+                shares = math.ceil(buymoney/(actual_price*100))*100
+                cost = shares*actual_price
+
                 
                 if cost > self.current_cash:
                     log.error(f"{current_date}现金不足: 需要{cost:.2f}元, 可用{self.current_cash:.2f}元")
@@ -252,21 +266,33 @@ class PortfolioSimulator:
     
     def _get_dividend_data(self, code: str) -> pd.DataFrame:
         """获取股票分红数据"""
+        self.AK_TRYTIME += 1
         try:
-            # 实际使用时应替换为正确的分红接口
+            # 获取分红接数据
             dividend_df = ak.stock_history_dividend_detail(symbol=code)
+            
             if not dividend_df.empty:
                 dividend_df = dividend_df[['除权除息日', '派息']]
                 dividend_df['每股分红'] = dividend_df['派息'] / 10
                 return dividend_df[['除权除息日', '每股分红']]
-            return pd.DataFrame()
-        except:
-            # 备用方法：使用模拟数据
-            log.error(f"使用模拟分红数据: {code}")
             return pd.DataFrame({
-                '除权除息日': ['20250115', '20250601'],
-                '每股分红': [1.5, 2.0]
+                '除权除息日': [ '20250601'],
+                '每股分红': [0]
             })
+        except Exception as e:
+            if self.AK_TRYTIME < self.MAX_TRYTIMES:
+                log.error(f"{code}通过akshare获取分红失败{self.AK_TRYTIME} 次，休眠后重试")
+                time.sleep(self.AK_TRY_FAILD_SLEEPTIME)
+                #失败次数没到上限休眠后重新查询
+                return self._get_dividend_data(code)
+            else:
+                # 备用方法：使用模拟数据
+                log.error(f"{code}通过akshare获取分红失败{self.AK_TRYTIME} 次，不在重试。使用模拟0分红数据")
+                log.error(f"错误信息: {str(e)}")
+                return pd.DataFrame({
+                    '除权除息日': [ '20250601'],
+                    '每股分红': [0]
+                })
     
     def process_dividends(self, current_date: str) -> None:
         """处理分红事件"""
@@ -279,8 +305,7 @@ class PortfolioSimulator:
             buy_date = pd.to_datetime(position.buy_date, format="%Y%m%d")
 
             # 将除权出席日期列转换为datetime类型[3,5,6](@ref)
-            dividend_df['除权除息日'] = pd.to_datetime(dividend_df['除权除息日'], format="%Y%m%d", errors='coerce')
-            
+            dividend_df['除权除息日'] = pd.to_datetime(dividend_df['除权除息日'], format="%Y%m%d", errors='coerce')           
             
             # 筛选当前日期前的分红
             dividends = dividend_df[
@@ -290,7 +315,7 @@ class PortfolioSimulator:
             
             # 处理未记录的分红
             for _, row in dividends.iterrows():
-                div_date = row['除权除息日']
+                div_date = row['除权除息日'].strftime('%Y%m%d') if pd.notnull(row['除权除息日']) else None
                 div_per_share = row['每股分红']
                 
                 # 检查是否已记录
@@ -417,7 +442,7 @@ def get_portfolio_stocks(select_path=".\input\selectlist_my.xlsx") -> pd.DataFra
     :return: DataFrame(代码, 名称)
     """
     # 读取上海数据[1,3](@ref)
-    se_cols = {'A股代码':'code', 'buydate':'buydate',"amount":"amount"}
+    se_cols = {'A股代码':'code', 'buydate':'buydate'}
     se_df = pd.read_excel(select_path,
         usecols=list(se_cols.keys()),
         dtype={'A股代码': str, 'buydate' : str}
@@ -429,30 +454,39 @@ def get_portfolio_stocks(select_path=".\input\selectlist_my.xlsx") -> pd.DataFra
     se_df.drop_duplicates(subset=['code'], keep='first', inplace=True)
     se_df.sort_values(by='buydate', inplace=True)
     
-    return se_df[['code', 'buydate',"amount"]]
+    return se_df[['code', 'buydate']]
 
 
 # ====================== 测试代码 ======================
-def test_portfolio_simulator() -> pd.DataFrame:
+def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
     """测试投资组合模拟器"""
+    """还缺少高送转后share的增加"""
+
     # 初始化组合
     simulator = PortfolioSimulator(
-        initial_cash=1000000,
-        start_date="20230101",
+        initial_cash=ini_cash,
+        start_date="20190701",
         isSaveStock = False #excel中是否要存储各股票每天的价格，用作手工校验
     )
     
     # 从excel创建股票订单
-    buy_df = get_portfolio_stocks(r".\input\selectlist_my.xlsx").dropna(axis=0, how='any')
+    buy_df = get_portfolio_stocks(r".\input\detect_rev_BUY_20250701.xlsx").dropna(axis=0, how='any')
+    # 订单数量，用于计算每次等权购买可用的资金
+    order_amount = len(buy_df)
+    buymoney = ini_cash /order_amount
+    log.info(f"初始金额{ini_cash}，订单数{order_amount}，等权买入金额{buymoney}")
+
     for _, row in buy_df.iterrows():
         code = row['code']
         buydate = row['buydate']
-        amount = row['amount']
-        amount_100 = math.floor(amount/100)*100
-        simulator.buy_stock(code, buydate, amount_100)
+        
+        #amount = row['amount']
+        #amount_100 = math.floor(amount/100)*100
+        #if amount_100<100 : amount_100=100            
+        simulator.buy_stock(code, buydate, buymoney)
     
     # 运行回测
-    end_date = "20250626"
+    end_date = "20250701"
     results = simulator.run_backtest(end_date)
     
     # 保存结果
@@ -467,4 +501,4 @@ def test_portfolio_simulator() -> pd.DataFrame:
 
 if __name__ == "__main__":
     # 运行测试
-    test_results = test_portfolio_simulator()
+    test_results = test_portfolio_simulator(5000000)

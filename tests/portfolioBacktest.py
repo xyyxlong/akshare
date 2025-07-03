@@ -1,14 +1,21 @@
 ﻿import akshare as ak
 import pandas as pd
 import numpy as np
-import log4ak
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Union, Any, Optional
 import math
 import time
+import log4ak
+import insertStockHist as ish
+import insertDividendInfo as idi
 
 # 日志配置
 log = log4ak.LogManager(log_level=log4ak.INFO)
+
+
+IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
+HOLD_DAYS_CONDITION = 900 #卖出条件持仓时间 >= 600天
+RETURN_CONDITION = 3.6 #卖出条件总收益率 >= 3.6倍
 
 
 class PositionTracker:
@@ -40,6 +47,8 @@ class PositionTracker:
         self.buy_fee = buy_fee
         self.dividend_tax = dividend_tax
         self.dividends = []  # 分红记录: [(date, 每股分红, 税后金额)]
+
+
         
         # 获取买入价格(不复权)
         self.buy_price = buy_price
@@ -48,6 +57,22 @@ class PositionTracker:
     def _get_actual_price(self, date: str) -> float:
         """获取含手续费的买入价格"""
         try:
+            #if IS_MYSQL:
+            #    df = ish.get_stock_data_from_mysql(code_clean,'qfq')
+            #    df = df[['日期', '收盘', '成交额']].copy()
+            #    start_date_dt = pd.to_datetime(start_date, format='%Y%m%d')
+            #    df['日期']= pd.to_datetime(df['日期'], format='%Y%m%d')
+
+            #    df = df[df['日期'] > start_date_dt]
+
+            #else:
+            #    df = ak.stock_zh_a_hist(
+            #        symbol=code_clean,
+            #        period="daily",
+            #        adjust="qfq",
+            #        start_date=start_date
+            #    )
+
             # 获取不复权收盘价
             price_df = ak.stock_zh_a_hist(
                 symbol=self.code,
@@ -72,31 +97,63 @@ class PositionTracker:
         log.info(f"{self.code}在{dividend_date}分红: 每股{dividend_per_share:.4f}元 -> 税后{net_dividend:.4f}元")
         return total_net_dividend
     
+    def _check_sell_conditions(self, current_date: str, total_return_rate: float) -> bool:
+        """
+        检查卖出条件（使用完整收益率）
+        条件1：持仓时间 >= 600天
+        条件2：总收益率 >= 3.6倍
+        """
+        #如果初始化后还没买入，直接返回，不做卖出判断
+        if self.shares == 0:
+            return False
+
+        # 计算持仓天数
+        current_dt = pd.to_datetime(current_date)
+        buy_dt = pd.to_datetime(self.buy_date)
+        hold_days = (current_dt - buy_dt).days
+        
+        # 条件检查
+        time_condition = hold_days >= HOLD_DAYS_CONDITION
+        return_condition = total_return_rate >= RETURN_CONDITION
+        
+        # 详细日志
+        log.debug(
+            f"{self.code} 卖出检查 @ {current_date}: "
+            f"持仓{hold_days}天/总收益率{total_return_rate:.2f}x "
+            f"结果={'卖出' if time_condition or return_condition else '持有'}"
+        )
+        
+        return time_condition or return_condition
+
     def calculate_daily_positionvalues(
         self, 
         current_date: str, 
         current_price: float
-    ) -> Tuple[float, float, float]:
+    ) -> Tuple[float, float, float, float, bool]:
         """
         计算单只股票在指定日期的价值
         :param current_date: 当前日期 (YYYYMMDD)
         :param current_price: 当前不复权价格
-        :return: (市值, 累计收益，累计分红)
+        :return: (市值, 累计收益，累计分红，是否触发卖出)
         """
-        # 当前市值
+        # 1. 计算基础指标
         market_value = self.shares * current_price
+        cost_value = self.shares * self.buy_price
         
-        # 累计分红收益 (税后)
+        # 2. 计算累计分红（包含当日）
         dividend_income = sum(
             amount for date, _, amount in self.dividends 
-            if  pd.to_datetime(date) <= pd.to_datetime(current_date)
+            if pd.to_datetime(date) <= pd.to_datetime(current_date)
         )
         
-        # 总收益 = (当前市值 - 成本市值) + 分红收益
-        cost_value = self.shares * self.buy_price
+        # 3. 计算总收益和总收益率
         total_return = (market_value - cost_value) + dividend_income
+        total_return_rate = total_return / cost_value if cost_value > 0 else 0
         
-        return market_value, total_return, dividend_income
+        # 4. 检查卖出条件（使用完整收益率）
+        should_sell = self._check_sell_conditions(current_date, total_return_rate)
+        
+        return market_value, total_return, dividend_income, total_return_rate, should_sell
 
 class PortfolioSimulator:
     """
@@ -154,14 +211,32 @@ class PortfolioSimulator:
         """预加载并缓存单只股票历史数据"""
         if code not in self.price_cache:
             try:
+                df=[]
+                if IS_MYSQL:
+                    df = ish.get_stock_data_from_mysql(code,'')
+                    df = df[['日期', '收盘']].copy()
+                    start_date_dt = pd.to_datetime(start_date, format='%Y%m%d')
+                    df['日期']= pd.to_datetime(df['日期'], format='%Y%m%d')
+
+                    df = df[df['日期'] >= start_date_dt]
+
+                else:
+                    df = ak.stock_zh_a_hist(
+                        symbol=code,
+                        period="daily",
+                        start_date=start_date,
+                        end_date=end_date,
+                        adjust=""
+                    )
+
                 # 一次性获取股票全部历史数据
-                df = ak.stock_zh_a_hist(
-                    symbol=code,
-                    period="daily",
-                    start_date=start_date,
-                    end_date=end_date,
-                    adjust=""
-                )
+                #df = ak.stock_zh_a_hist(
+                #    symbol=code,
+                #    period="daily",
+                #    start_date=start_date,
+                #    end_date=end_date,
+                #    adjust=""
+                #)
                 # 设置日期索引加速查询[9](@ref)
                 df['日期']=pd.to_datetime(df['日期']).dt.strftime('%Y%m%d')
                 df = df.set_index('日期')
@@ -178,7 +253,8 @@ class PortfolioSimulator:
                 self.AK_TRYTIME=0
                 self.dividend_cache[code] = self._get_dividend_data(code)
                 log.info(f"预加载{code}分红数据: {len(self.dividend_cache[code])}条记录")
-                time.sleep(1) 
+
+                if not IS_MYSQL: time.sleep(1) 
 
 
     def _get_trading_calendar(self, start_date: str) -> List[str]:
@@ -189,6 +265,8 @@ class PortfolioSimulator:
     
     def buy_stock(self, code: str, buy_date: str, buymoney: float) -> bool:
         """买入下单处理，仅记录订单，不立即扣款"""
+
+        #等权买入，即每支股票只买入一次的时候激活如下代码
         if any(order[0] == code for order in self.pending_orders):
             log.error(f"{code}已有待处理订单")
             return False
@@ -266,11 +344,9 @@ class PortfolioSimulator:
     
     def _get_dividend_data(self, code: str) -> pd.DataFrame:
         """获取股票分红数据"""
-        self.AK_TRYTIME += 1
-        try:
-            # 获取分红接数据
-            dividend_df = ak.stock_history_dividend_detail(symbol=code)
-            
+
+        if IS_MYSQL:
+            dividend_df = idi.get_dividend_data_mysql(code)
             if not dividend_df.empty:
                 dividend_df = dividend_df[['除权除息日', '派息']]
                 dividend_df['每股分红'] = dividend_df['派息'] / 10
@@ -279,20 +355,34 @@ class PortfolioSimulator:
                 '除权除息日': [ '20250601'],
                 '每股分红': [0]
             })
-        except Exception as e:
-            if self.AK_TRYTIME < self.MAX_TRYTIMES:
-                log.error(f"{code}通过akshare获取分红失败{self.AK_TRYTIME} 次，休眠后重试")
-                time.sleep(self.AK_TRY_FAILD_SLEEPTIME)
-                #失败次数没到上限休眠后重新查询
-                return self._get_dividend_data(code)
-            else:
-                # 备用方法：使用模拟数据
-                log.error(f"{code}通过akshare获取分红失败{self.AK_TRYTIME} 次，不在重试。使用模拟0分红数据")
-                log.error(f"错误信息: {str(e)}")
+        else:
+            self.AK_TRYTIME += 1
+            try:
+                # 获取分红接数据
+                dividend_df = ak.stock_history_dividend_detail(symbol=code)
+            
+                if not dividend_df.empty:
+                    dividend_df = dividend_df[['除权除息日', '派息']]
+                    dividend_df['每股分红'] = dividend_df['派息'] / 10
+                    return dividend_df[['除权除息日', '每股分红']]
                 return pd.DataFrame({
                     '除权除息日': [ '20250601'],
                     '每股分红': [0]
                 })
+            except Exception as e:
+                if self.AK_TRYTIME < self.MAX_TRYTIMES:
+                    log.error(f"{code}通过akshare获取分红失败{self.AK_TRYTIME} 次，休眠后重试")
+                    time.sleep(self.AK_TRY_FAILD_SLEEPTIME)
+                    #失败次数没到上限休眠后重新查询
+                    return self._get_dividend_data(code)
+                else:
+                    # 备用方法：使用模拟数据
+                    log.error(f"{code}通过akshare获取分红失败{self.AK_TRYTIME} 次，不在重试。使用模拟0分红数据")
+                    log.error(f"错误信息: {str(e)}")
+                    return pd.DataFrame({
+                        '除权除息日': [ '20250601'],
+                        '每股分红': [0]
+                    })
     
     def process_dividends(self, current_date: str) -> None:
         """处理分红事件"""
@@ -338,6 +428,7 @@ class PortfolioSimulator:
             'total_value': 总资产,
             'net_value': 单位净值,
             'return': 累计收益,
+            'sold_stocks': []  # 记录当日卖出股票
         }
         """
         # 初始化结果
@@ -347,9 +438,12 @@ class PortfolioSimulator:
             'positions_value': 0,
             'total_value': self.current_cash,
             'net_value': 1,
-            'return': 0
+            'return': 0,
+            'sold_stocks': [] 
         }
 
+        # 存储待删除的持仓代码
+        to_remove = []
         # 统一日期格式比较[3](@ref)
         current_date_dt = pd.to_datetime(current_date)
 
@@ -357,41 +451,83 @@ class PortfolioSimulator:
         #1，遍历持仓并计算持仓市值
         for code, position in self.positions.items():        
             try:
-                # 容错：自动补充缓存
-                if code not in self.price_cache or self.price_cache[code].empty:
-                    self._cache_stock_data(code, self.start_date, self.backtest_end_date)
-            
-                # 统一索引格式（关键改进）
-                price_df = self.price_cache[code].reset_index()
-                price_df['日期'] = pd.to_datetime(price_df['日期'])               
-            
-                # 获取最近有效价格（优化逻辑）a
-                valid_prices = price_df[price_df['日期'] <= current_date_dt]
-                if not valid_prices.empty:
-                    current_price = valid_prices.iloc[-1]['收盘']
-                else:
-                    current_price = 0.0
-                    log.error(f"{code}无有效价格数据")                 
+                 # 获取当前价格
+                current_price = self._get_current_price(code, current_date)
+                # 计算持仓价值（包含卖出判断）
+                (market_value, 
+                 position_return, 
+                 dividend_income, 
+                 return_rate, 
+                 should_sell) = position.calculate_daily_positionvalues(current_date, current_price)
+                
+                # 处理卖出信号
+                if should_sell:
+                    # 卖出操作：增加现金，移除持仓
+                    self.current_cash += market_value
+                    to_remove.append(code)
+                    resean = f'{HOLD_DAYS_CONDITION}天止盈' if return_rate < RETURN_CONDITION else '{RETURN_CONDITION}倍止盈'
+                    
+                    # 记录卖出信息
+                    result['sold_stocks'].append({
+                        'code': code,
+                        'amount': market_value,
+                        'return_rate': return_rate,
+                        'reason': resean
+                    })
+                    log.info(
+                        f"{current_date} 卖出 {code}，卖出原因{resean}: "
+                        f"获得{market_value:.2f}元 (收益率{return_rate:.2f}x)"
+                    )
+                    continue  # 跳过后续持仓价值累加
+                
+                # 未卖出则累加持仓价值
+                result['positions_value'] += market_value
+                result[f'{code}_return'] = position_return
+                result[f'{code}_dividend'] = dividend_income
+                
+                if self.isSaveStock:
+                    result[f'{code}_price'] = current_price
+                    
             except Exception as e:
-                current_price = 0.0
-                log.error(f"价格获取失败: {str(e)}")
-
-            #计算单支股票持仓市值
-            market_value, one_position_return,dividend_income = position.calculate_daily_positionvalues(current_date, current_price)            
-            result['positions_value'] += market_value
-            result[f'{code}return'] = one_position_return
-            result[f'{code}dividend'] = dividend_income
-            if self.isSaveStock :
-                result[f'{code}current_price'] = current_price #如果要看每天的价格可激活此行
+                log.error(f"{code}计算失败: {str(e)}")
         
-        #2，计算总市值=现金+持仓市值
-        result['total_value'] = self.current_cash +  result['positions_value']
-        #3，计算净值和利润
-        result['net_value'] = result['total_value']/self.initial_cash
-        result['return'] = result['total_value'] - self.initial_cash
+        # 移除已卖出持仓【待补充】
 
+
+        for code in to_remove:
+            del self.positions[code]
+        
+        # 计算总值
+        result['total_value'] = self.current_cash + result['positions_value']
+        result['net_value'] = result['total_value'] / self.initial_cash
+        result['return'] = result['total_value'] - self.initial_cash
+        
         return result
     
+    def _get_current_price(self, code: str, current_date: str) -> float:
+        """安全获取当前价格"""
+        try:
+            if code not in self.price_cache or self.price_cache[code].empty:
+                self._cache_stock_data(code, self.start_date, self.backtest_end_date)
+            
+
+            # 统一索引格式（关键改进）
+            price_df = self.price_cache[code].reset_index()
+            price_df['日期'] = pd.to_datetime(price_df['日期'])
+            current_date_dt = pd.to_datetime(current_date)
+            
+            # 获取最近有效价格（优化逻辑）a
+            valid_prices = price_df[price_df['日期'] <= current_date_dt]
+            if not valid_prices.empty:
+                return valid_prices.iloc[-1]['收盘']
+            else:
+                log.error(f"{code}无有效价格数据")      
+                return 0.0
+        except Exception as e:
+            log.error(f"价格获取失败: {str(e)}")
+            return 0.0
+
+
     def run_backtest(self, end_date: str = '20230101') -> pd.DataFrame:
         """运行回测"""
 
@@ -451,7 +587,7 @@ def get_portfolio_stocks(select_path=".\input\selectlist_my.xlsx") -> pd.DataFra
 
 
     # 数据清洗
-    se_df.drop_duplicates(subset=['code'], keep='first', inplace=True)
+    se_df.drop_duplicates(subset=['code'], keep='first', inplace=True) #每支股票只买一次，等权购买，如果注释也就是可以不等权
     se_df.sort_values(by='buydate', inplace=True)
     
     return se_df[['code', 'buydate']]
@@ -470,10 +606,10 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
     )
     
     # 从excel创建股票订单
-    buy_df = get_portfolio_stocks(r".\input\detect_rev_BUY_20250701.xlsx").dropna(axis=0, how='any')
+    buy_df = get_portfolio_stocks(r".\input\detect_rev_BUY_20250701_my.xlsx").dropna(axis=0, how='any')
     # 订单数量，用于计算每次等权购买可用的资金
     order_amount = len(buy_df)
-    buymoney = ini_cash /order_amount
+    buymoney = ini_cash /order_amount * 2
     log.info(f"初始金额{ini_cash}，订单数{order_amount}，等权买入金额{buymoney}")
 
     for _, row in buy_df.iterrows():
@@ -486,12 +622,12 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
         simulator.buy_stock(code, buydate, buymoney)
     
     # 运行回测
-    end_date = "20250701"
+    end_date = "20250703"
     results = simulator.run_backtest(end_date)
     
     # 保存结果
-    results.to_csv(f".\output\portfolio_backtest_{end_date}.csv", index=False)
-    print(f"回测完成，结果已保存到 portfolio_backtest_{end_date}.csv")
+    results.to_excel(f".\output\portfolio_backtest_{end_date}.xlsx", index=False)
+    print(f"回测完成，结果已保存到 portfolio_backtest_{end_date}.xlsx")
     
     # 打印最后5天结果
     print("\n最后5天组合表现:")
@@ -501,4 +637,5 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
 
 if __name__ == "__main__":
     # 运行测试
+    IS_MYSQL = True
     test_results = test_portfolio_simulator(5000000)

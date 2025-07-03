@@ -164,27 +164,6 @@ def query_industry_pe_sequential(date_list, symbol="证监会行业分类"):
     return (None, None)
 
 
-def insert_batch_insert(data):
-    try:
-        # 建立PyMySQL连接（网页4标准连接方式）
-        conn = pymysql.connect(**DB_CONFIG)
-        print("✅ 连接成功 | MySQL版本:", conn.get_server_info())
-        conn.autocommit(False)  # 禁用自动提交
-
-        with conn.cursor() as cursor:
-            _execute_batch_insert(cursor, data)
-            conn.commit()
-            print(f"✅ 插入成功 |{data} ")
-    except MySQLError as e:
-        if e.args[0] in (1062, 1586):  # 忽略主键冲突错误
-            pass
-        else:
-            print(f"Database error: {err.code} {err.msg}")
-            raise
-    finally:
-        if conn and conn.open:
-            conn.close()
-
 
 
 if __name__ == "__main__":

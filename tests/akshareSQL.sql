@@ -121,9 +121,102 @@ SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="002460"  AND  trade_date
 SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_code IN 
 ("600036","000858","601919","000333","002555","002602","002460","002738")
 
-      SELECT trade_date AS `日期`, pe, pe_ttm 
+	SELECT trade_date AS `日期`, pe, pe_ttm 
         FROM stock_pe_history 
-        WHERE stock_code = %s 
-        ORDER BY trade_date
+        WHERE stock_code = "002466"
+        ORDER BY trade_date DESC
 
-     
+ 
+-- 分红信息表
+CREATE TABLE dividend_info (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+    announcement_date DATE COMMENT '公告日期',
+    bonus_share FLOAT COMMENT '送股(每10股)',
+    additional_shares FLOAT COMMENT '转增(每10股)',
+    cash_dividend FLOAT COMMENT '派息(每10股)',
+    progress VARCHAR(20) COMMENT '进度',
+    ex_dividend_date DATE COMMENT '除权除息日',
+    equity_reg_date DATE COMMENT '股权登记日',
+    bonus_listing_date DATE COMMENT '红股上市日',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY (stock_code, announcement_date)
+) COMMENT '股票分红信息表';
+
+SELECT * FROM dividend_info
+SELECT COUNT(*) FROM dividend_info
+SELECT COUNT(DISTINCT stock_code) FROM dividend_info
+
+-- 配股信息表
+CREATE TABLE allotment_info (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+    announcement_date DATE COMMENT '公告日期',
+    allotment_plan VARCHAR(50) COMMENT '配股方案',
+    allotment_price FLOAT COMMENT '配股价格',
+    base_equity FLOAT COMMENT '基准股本(万股)',
+    ex_rights_date DATE COMMENT '除权日',
+    equity_reg_date DATE COMMENT '股权登记日',
+    payment_start DATE COMMENT '缴款起始日',
+    payment_end DATE COMMENT '缴款终止日',
+    allotment_listing DATE COMMENT '配股上市日',
+    total_funds FLOAT COMMENT '募集资金合计(万元)',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY (stock_code, announcement_date)
+) COMMENT '股票配股信息表';   
+
+SELECT * FROM allotment_info
+SELECT COUNT(*) FROM allotment_info
+SELECT COUNT(DISTINCT stock_code) FROM allotment_info
+SELECT DISTINCT stock_code FROM allotment_info
+
+
+-- 股票历史行情数据表
+CREATE TABLE stock_historical_data (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增主键',
+    DATE DATE NOT NULL COMMENT '日期',
+    OPEN DECIMAL(10, 4) NOT NULL COMMENT '开盘价',
+    CLOSE DECIMAL(10, 4) NOT NULL COMMENT '收盘价',
+    high DECIMAL(10, 4) NOT NULL COMMENT '最高价',
+    low DECIMAL(10, 4) NOT NULL COMMENT '最低价',
+    volume BIGINT NOT NULL COMMENT '成交量(股)',
+    amount DECIMAL(20, 4) NOT NULL COMMENT '成交额(元)',
+    amplitude DECIMAL(10, 4) NOT NULL COMMENT '振幅(%)',
+    change_percent DECIMAL(10, 4) NOT NULL COMMENT '涨跌幅(%)',
+    change_amount DECIMAL(10, 4) NOT NULL COMMENT '涨跌额(元)',
+    turnover_rate DECIMAL(10, 4) NULL COMMENT '换手率(%)',
+    stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
+) COMMENT '股票历史行情数据表';
+
+SELECT * FROM stock_historical_data WHERE stock_code='002466' AND DATE='2010-08-31'
+SELECT * FROM stock_historical_data ORDER BY DATE DESC
+SELECT COUNT(*) FROM stock_historical_data
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data
+SELECT DISTINCT stock_code FROM stock_historical_data
+
+
+-- 股票历史行情数据表(qfq)
+CREATE TABLE stock_historical_data_qfq (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增主键',
+    DATE DATE NOT NULL COMMENT '日期',
+    OPEN DECIMAL(10, 4) NOT NULL COMMENT '开盘价',
+    CLOSE DECIMAL(10, 4) NOT NULL COMMENT '收盘价',
+    high DECIMAL(10, 4) NOT NULL COMMENT '最高价',
+    low DECIMAL(10, 4) NOT NULL COMMENT '最低价',
+    volume BIGINT NOT NULL COMMENT '成交量(股)',
+    amount DECIMAL(20, 4) NOT NULL COMMENT '成交额(元)',
+    amplitude DECIMAL(10, 4) NOT NULL COMMENT '振幅(%)',
+    change_percent DECIMAL(10, 4) NOT NULL COMMENT '涨跌幅(%)',
+    change_amount DECIMAL(10, 4) NOT NULL COMMENT '涨跌额(元)',
+    turnover_rate DECIMAL(10, 4) NULL COMMENT '换手率(%)',
+    stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
+) COMMENT '股票历史行情数据表';
+
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='002466' AND DATE='2010-08-31'
+SELECT COUNT(*) FROM stock_historical_data_qfq
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq
+SELECT DISTINCT stock_code FROM stock_historical_data_qfq

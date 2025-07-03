@@ -5,6 +5,7 @@ from pymysql import MySQLError
 from datetime import datetime,timedelta
 from tqdm import tqdm
 import log4ak
+from typing import Dict, List, Optional, Tuple
 
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 
@@ -72,7 +73,7 @@ def _execute_batch_insert(cursor, data,insert_sql):
         cursor.executemany(insert_sql, data)
     except MySQLError as e:
         if e.args[0] in (1062, 1586):  # 忽略主键冲突错误
-            log.debug(f"错误码({e.args[0]})，出现主键冲突，已忽略。{e}")
+            log.info(f"错误码({e.args[0]})，出现主键冲突，已忽略。{e}")
             pass
         else:
             raise
@@ -80,26 +81,53 @@ def _execute_batch_insert(cursor, data,insert_sql):
 
 
 
-def insert_batch_insert(data):
+def insert_batch_insert(data,insert_sql):
     try:
         # 建立PyMySQL连接（网页4标准连接方式）
         conn = pymysql.connect(**DB_CONFIG)
-        print("✅ 连接成功 | MySQL版本:", conn.get_server_info())
+        log.info(f"✅ 连接成功 | MySQL版本:{conn.get_server_info()}")
         conn.autocommit(False)  # 禁用自动提交
 
         with conn.cursor() as cursor:
-            _execute_batch_insert(cursor, data)
+            _execute_batch_insert(cursor, data,insert_sql)
             conn.commit()
-            print(f"✅ 插入成功 |{data} ")
+            log.info(f"✅ 成功插入 {cursor.rowcount} 条数据 ")
+            return cursor.rowcount
     except MySQLError as e:
         if e.args[0] in (1062, 1586):  # 忽略主键冲突错误
             pass
         else:
-            print(f"Database error: {err.code} {err.msg}")
+            log.error(f"Database error: {e.code} {e.msg}")
+            conn.rollback()
             raise
     finally:
         if conn and conn.open:
             conn.close()
+
+
+def _execute_query(sql: str, params: tuple = ()) -> Optional[List[Tuple]]:
+    """执行SQL查询并返回原始结果集"""
+    try:
+        conn = pymysql.connect(**DB_CONFIG)
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+            # 获取列名（数据库原始列名）
+            columns = [col[0] for col in cursor.description]
+            # 逐行获取数据[6](@ref)
+            rows = []
+            while True:
+                row = cursor.fetchone()
+                if row is None:
+                    break
+                rows.append(row)
+            return columns, rows
+    except Exception as e:
+        log.error(f"{params}数据库查询失败: {str(e)}")
+        return None, None
+    finally:
+        if conn:
+            conn.close()
+
 
 if __name__ == "__main__":
     df = ak.stock_index_pe_lg('中证1000')

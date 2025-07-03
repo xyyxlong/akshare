@@ -7,6 +7,7 @@ from tqdm import tqdm
 from getAllStock import get_all_stocks, get_select_stocks
 import get_industry_historyPE as gi
 import get_stockPE_his as gs
+import insertStockHist as ish
 import commTools as ct
 from datetime import datetime, timedelta
 import log4ak
@@ -226,15 +227,27 @@ def get_stock_data(code: str, start_date: str) -> pd.DataFrame:
     """
     # 清洗代码格式（兼容带后缀的代码）
     code_clean = code.split('.')[0]
-    df = ak.stock_zh_a_hist(
-        symbol=code_clean,
-        period="daily",
-        adjust="qfq",
-        start_date=start_date
-    )
     
-    # 字段处理
-    df = df[['日期', '收盘', '成交额']].copy()
+    df = pd.DataFrame()
+    
+    if IS_MYSQL:
+        df = ish.get_stock_data_from_mysql(code_clean,'qfq')
+        df = df[['日期', '收盘', '成交额']].copy()
+        start_date_dt = pd.to_datetime(start_date, format='%Y%m%d')
+        df['日期']= pd.to_datetime(df['日期'], format='%Y%m%d')
+
+        df = df[df['日期'] > start_date_dt]
+
+    else:
+        df = ak.stock_zh_a_hist(
+            symbol=code_clean,
+            period="daily",
+            adjust="qfq",
+            start_date=start_date
+        )
+    
+        # 字段处理
+        df = df[['日期', '收盘', '成交额']].copy()
     
     # 严格日期处理
     df.loc[:, '日期'] = pd.to_datetime(
@@ -646,7 +659,6 @@ if __name__ == "__main__":
     ISMY = False
     #是否检测买点
     IS_BUY = True
-
 
 
     #detect_with_allPE(my_select)

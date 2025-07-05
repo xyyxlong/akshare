@@ -7,24 +7,29 @@ import log4ak
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from getAllStock import get_all_stocks, get_select_stocks, ipodatefilter_stocks
+import insertSelectStockPE as issp
+import insert2Mysql as ins
+import get_stockPE_his as gsh
 
-
+##运行配置：
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
+RECONNECT_TIME = 30 #断线重连休眠时间
+CHUNK_NUM = 30# 全市场数据过多分10块处理
+ISMY = False #是否选取自选配置False/True
+IS_MYSQL = False  #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
 
-##参数设置：
+##选股参数设置：
 STARTYEAR = "2019"  #计算的起始年份
 ROE = 15 #过去几年来平均净资产收益率高于15%
 PEMAX = 25 #过去几天平均市盈率低于25且大于0
 PASTDAY = 30 #过去30天
 PASTYEAR = 5 #计算过去5年的净资产收益率，负债率，应收账款周期
-DEBT_RATIOS = 70 #负债率低于70%
-RECEIVABLE_DAYS = 30  #应收账款周期小于30
+DEBT_RATIOS = 70 #负债率低于70%     风险
+RECEIVABLE_DAYS = 30  #应收账款周期小于30  行业地位
+CASH2PROFIT = 1.25 #经营性现金流/净利润比例>1.1  保证赚的是真钱
 
-CHUNK_NUM = 5# 全市场数据过多分10块处理
-
-ISMY = False #是否选取自选配置False/True
 
 def selectStock():
     ## A 股上市公司列表
@@ -36,7 +41,7 @@ def selectStock():
         stock_zh_a_spot_df = ipodatefilter_stocks(df,f"{STARTYEAR}0101") #对上市时间进行筛选
  
     log.info(f"获取到 A 股上市公司列表，是否只选取自选股：{ISMY}")
-    df_stock = stock_zh_a_spot_df[['代码','名称']]#[2882:]
+    df_stock = stock_zh_a_spot_df[['代码','名称']]#[339:]
 
     # 分块处理设置[2,3](@ref)
     total_rows = len(df_stock)
@@ -64,8 +69,9 @@ def selectStock():
                 log.info(f"处理第{file_num+1}批第{checkcount}条记录：{r_code}")
 
                 # 指标计算
-                var1, var2, var3, var4, var5, ratio = checkRoeCashEBIT(r_code, STARTYEAR)
-                var6 = check_pe_condition(r_code)
+                var1, var2, var3, var4, var5 = checkRoeCashEBIT(r_code, STARTYEAR)
+                ratio , var6 = check_pe_condition(r_code, r_name)
+                log.info(f"第{file_num+1}批第{checkcount}条记录处理结果var6={var6}")
 
                 varAll = var1 and var2 and var3 and var4 and var5 and var6
                 log.info(f"第{file_num+1}批第{checkcount}条记录处理结果varAll={varAll}")
@@ -118,19 +124,29 @@ def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
     2. 增强NaN值处理机制
     3. 优化数据校验逻辑
     """
-    try:
-        log.info(f"{r_code} 获取 {startyear} 至今财报数据")
+    for attempt in range(MAX_CONSECUTIVE_ERRORS):
+        try:
+            log.info(f"{r_code} 获取 {startyear} 至今财报数据")
         
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(ak.stock_financial_analysis_indicator, symbol=r_code, start_year=startyear)
-            df = future.result(timeout=OUTTIME)
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(ak.stock_financial_analysis_indicator, symbol=r_code, start_year=startyear)
+                df = future.result(timeout=OUTTIME)
+            break
     
-    except TimeoutError:
-        log.error(f"接口调用超时 | 股票代码: {r_code}")
-        return False, False, False, False, False
-    except Exception as e:
-        log.error(f"接口调用失败: {str(e)}")
-        return False, False, False, False, False
+        except TimeoutError:
+            log.error(f"checkRoeCashEBIT接口调用超时，次数{attempt+1} | 股票代码: {r_code}")
+            if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                time.sleep(RECONNECT_TIME)
+            else:
+                log.error(f"无法获取{r_code}的财报数据，跳过")
+                return False, False, False, False, False, None
+        except Exception as e:
+            log.error(f"checkRoeCashEBIT接口调用失败，次数{attempt+1} | 股票代码: {r_code}")
+            if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                time.sleep(RECONNECT_TIME)
+            else:
+                log.error(f"无法获取{r_code}的财报数据，跳过")
+                return False, False, False, False, False, None
         
     # 数据清洗和字段处理
     clean_df = df.rename(columns={
@@ -156,9 +172,13 @@ def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
     roe_values = clean_df['净资产收益率(%)'].head(PASTYEAR)
     var1 = len(roe_values) >= PASTYEAR and roe_values.mean() > ROE
     
-    # 指标2：经营现金流为正
-    cash_flow = clean_df['每股经营性现金流(元)'].head(1)
-    var2 = len(cash_flow) > 0 and cash_flow.iloc[0] > 0
+    # 指标2：近几年经营现金流/收益>1。
+    #cash_flow = clean_df['每股经营性现金流(元)'].head(1)
+    #var2 = len(cash_flow) > 0 and cash_flow.iloc[0] > 0
+    cash_flow  = clean_df['每股经营性现金流(元)'].head(PASTYEAR)
+    cash_flow_pers = cash_flow.mean()
+    profit_values_pers = clean_df['扣除非经常性损益后的每股收益(元)'].head(PASTYEAR).mean()
+    var2 =  len(cash_flow) >= PASTYEAR and cash_flow.min() >0 and cash_flow_pers/profit_values_pers > CASH2PROFIT
     
     # 指标3：最新净利润 > 前5年最大值
     clean_df['扣非净利润'] = pd.to_numeric(clean_df['扣除非经常性损益后的净利润(元)'], errors='coerce') / 10000
@@ -189,43 +209,63 @@ def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
     #if len(valid_receivable) >= PASTYEAR:#有些时候财报中没有这个值，所以不做时间判断
         # 检查所有值都满足条件
     var5 = (valid_receivable < RECEIVABLE_DAYS).all()
-
-    # 附加展示信息：股息发放率
-    dividend_payout = clean_df['股息发放率(%)'].head(PASTYEAR).dropna()    
-    dividend_payout_ratio = dividend_payout[dividend_payout.notna()]
-    dividend_payout_ratio_mean = dividend_payout_ratio.astype(float).mean()
     
     # 日志记录（包含有效数值）
     log.info(f"""
         {r_code} 财务指标结果:
         var1(ROE>14%): {var1} | 数值: {roe_values.values}
-        var2(现金流正): {var2} | 数值: {cash_flow.values}
+        var2(现金流正): {var2} | 数值: {cash_flow_pers}/{profit_values_pers}
         var3(净利润增长): {var3} | 数值: {profit_values.values}
         var4(负债率<=70%): {var4} | 有效数值: {valid_debt_ratios.values}
         var5(周转天数<30天): {var5} | 有效数值: {valid_receivable.values}
-        #平均股息发放率：{dividend_payout_ratio_mean} | 有效数值: {dividend_payout_ratio.values}
     """)
     
-    return var1, var2, var3, var4, var5, dividend_payout_ratio_mean
+    return var1, var2, var3, var4, var5
 
 
 ## 指标6- 市盈率低于PEMAX且大于0
-def check_pe_condition(stock_code="601398", pastday=PASTDAY):
-    # 获取最新接口调用添加精确的超时控制
-    try:
-        log.info(f"{stock_code}获取{pastday}天内有效市盈率数据")
-        
-        # 添加超时控制（网页[1][1](@ref)推荐方法）
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(ak.stock_a_indicator_lg, symbol=stock_code)
-            df = future.result(timeout=OUTTIME)  # 设置5秒超时[1,8](@ref)
-    
-    except TimeoutError:
-        log.error(f"接口调用超时：5秒未返回数据 | 股票代码：{stock_code}")
-        return False
-    except Exception as e:
-        log.error(f"接口调用失败: {str(e)}")
-        return False
+def check_pe_condition(stock_code="601398",stock_name="", pastday=PASTDAY):
+    """
+    获取PE，得到指标6- 市盈率低于PEMAX且大于0
+    可以通过数据库获取，也可以通过网路获取
+    """
+    if IS_MYSQL:
+        df = gsh.get_stock_pe_his(stock_code)
+        df = df.reset_index().copy()
+        df = df.rename(columns={
+            '日期': 'trade_date'
+            }).copy()
+    else:
+        # 获取最新接口调用添加精确的超时控制
+        for attempt in range(MAX_CONSECUTIVE_ERRORS):
+            try:
+                log.info(f"{stock_code}通过网络接口获取{pastday}天内有效市盈率数据")         
+      
+                # 添加超时控制（网页[1][1](@ref)推荐方法）
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(ak.stock_a_indicator_lg, symbol=stock_code)
+                    df = future.result(timeout=OUTTIME)  # 设置5秒超时[1,8](@ref)
+                    if df is not None : 
+                        #如果是从网络接口调用获取PE，顺便存入本地数据库
+                        batch_data = issp.patch_pe_data(stock_code, stock_name, df)
+                        ins.insert_to_mysql(batch_data, issp.INSERT_SQL)
+                        log.info(f"{stock_code}PE数据成功存入本地数据库")
+                        break
+
+            except TimeoutError:
+                log.error(f"check_pe_condition接口调用超时，次数{attempt+1} | 股票代码: {stock_code}")
+                if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                    time.sleep(RECONNECT_TIME)
+                else:
+                    log.error(f"无法获取{stock_code}的有效市盈率数据，跳过")
+                    return 0.0, False
+            except Exception as e:
+                log.error(f"check_pe_condition接口调用失败，次数{attempt+1} | 股票代码: {stock_code}")
+                if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                    time.sleep(RECONNECT_TIME)
+                else:
+                    log.error(f"无法获取{stock_code}的有效市盈率数据，跳过")
+                    return 0.0,False  
     
     # 日期处理优化（网页[3][3](@ref)数据格式）
     date_threshold = datetime.datetime.now() - datetime.timedelta(pastday)
@@ -239,21 +279,24 @@ def check_pe_condition(stock_code="601398", pastday=PASTDAY):
         ]
     except KeyError as ke:
         log.error(f"数据字段缺失：{str(ke)} | 请确认接口返回格式")
-        return False
+        return 0.0, False
         
     if valid_df.empty:
         log.info(f"{stock_code}无近期有效市盈率数据")
-        return "NAN"
+        return 0.0, False
     
     # 计算逻辑优化（网页[1][1](@ref)数据处理建议）
     try:
         pe_mean = valid_df['pe'].astype(float).mean()
-        var6 = 0 < pe_mean < PEMAX       
+        var6 = 0 < pe_mean < PEMAX 
+        dv_ratio = valid_df['dv_ratio'].astype(float).mean()
+
         log.info(f"{stock_code}近{pastday}内PE<{PEMAX}:var6={var6} | 数值: {pe_mean}")
-        return var6
+        log.info(f"{stock_code}股息率 = {dv_ratio}")
+        return dv_ratio, var6
     except ValueError as ve:
         log.error(f"市盈率数据类型错误：{str(ve)}")
-        return False
+        return 0.0, False
 
 
 def format_dates(date_series, fmt='%Y%m%d'):
@@ -268,7 +311,7 @@ def format_dates(date_series, fmt='%Y%m%d'):
 def handle_error(code: str, e: Exception, error_msg: str, counter: int):
     """统一处理错误日志和阈值判断"""
     log.error(error_msg)
-    time.sleep(2)  # 错误后延迟防止高频请求[6](@ref)
+    time.sleep(RECONNECT_TIME)  # 错误后延迟防止高频请求[6](@ref)
     
     # 触发连续错误异常
     if counter >= MAX_CONSECUTIVE_ERRORS:

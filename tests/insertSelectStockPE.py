@@ -10,11 +10,14 @@ from getAllStock import get_all_stocks, get_select_stocks
 import insert2Mysql as ins
 
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
+
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
-SELECT_PATH=r"..\input\selectlist.xlsx"
+RECONNECT_TIME = 30 #断线重连休眠时间
 
-CHUNK_NUM = 3# 分块数量处理设置
+SELECT_PATH=r".\input\selectlist.xlsx"
+
+CHUNK_NUM = 1# 分块数量处理设置
 
 INSERT_SQL ="""
     INSERT IGNORE INTO `stock_pe_history` 
@@ -25,8 +28,11 @@ INSERT_SQL ="""
 
 def insertSelectStockPE(path = SELECT_PATH):
     ## 存入所选的A股上市公司历史PE
+    if path == "all":
+        stock_zh_a_spot_df = get_all_stocks()
+    else:
+        stock_zh_a_spot_df = get_select_stocks(path)
 
-    stock_zh_a_spot_df = get_select_stocks(path)
     log.info("获取到所选的 A 股上市公司列表")
     df_stock = stock_zh_a_spot_df[['代码','名称']]
 
@@ -62,16 +68,7 @@ def insertSelectStockPE(path = SELECT_PATH):
                 dfpe=get_pe_condition(r_code)
                 log.debug(f"获取到{r_code}历史PE，数据块:{dfpe}")
 
-                # 使用assign实现向量化赋值
-                dfpe = dfpe.assign(**{
-                    'stock_code': r_code,
-                    'stock_name': r_name
-                    })
-
-                # 直接处理PE数据并添加到batch_data
-                for _, pe_row in dfpe.iterrows():
-                    processed_row = process_pe_data(pe_row)
-                    batch_data.append(processed_row)
+                batch_data.append(r_code, r_name, patch_pe_data(dfpe))
 
                 error_count = 0  # 成功执行后重置计数器[6](@ref)
                 log.info(f"功执行后重置计数器error_count={error_count}")
@@ -107,6 +104,28 @@ def insertSelectStockPE(path = SELECT_PATH):
 
     return "所有分块处理完成"
 
+def patch_pe_data(r_code:str, r_name:str, df: pd.DataFrame) :
+    """
+    封把装df数据到存储的元组列表中
+    """
+    # 直接存储处理后的元组列表
+    batch_data = []
+    # 使用assign实现向量化赋值
+
+    if df is not None:
+        df = df.assign(**{
+            'stock_code': r_code,
+            'stock_name': r_name
+            })
+
+        # 直接处理PE数据并添加到batch_data
+        for _, pe_row in df.iterrows():
+            processed_row = process_pe_data(pe_row)
+            batch_data.append(processed_row)
+
+    return batch_data
+
+
 def process_pe_data(row):
     """
     处理单行PE数据，将NaN转换为None
@@ -128,26 +147,41 @@ def process_pe_data(row):
 
 def get_pe_condition(stock_code="601398"):
     # 获取历史PE信息
-    try:
-        log.info(f"{stock_code}获取有效市盈率数据")
+    for attempt in range(MAX_CONSECUTIVE_ERRORS):
+        try:
+            log.info(f"{stock_code}获取有效市盈率数据")
         
-        # 添加超时控制（网页[1][1](@ref)推荐方法）
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(ak.stock_a_indicator_lg, symbol=stock_code)
-            df = future.result(timeout=OUTTIME)  # 设置5秒超时[1,8](@ref)
-            return df
+            # 添加超时控制（网页[1][1](@ref)推荐方法）
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(ak.stock_a_indicator_lg, symbol=stock_code)
+                df = future.result(timeout=OUTTIME)  # 设置5秒超时[1,8](@ref)
+                return df
     
-    except TimeoutError:
-        log.error(f"接口调用超时：5秒未返回数据 | 股票代码：{stock_code}")
-        return False
-    except Exception as e:
-        log.error(f"接口调用失败: {str(e)}")
-        return False
+        except TimeoutError:
+            log.error(f"stock_a_indicator_lg接口调用超时，次数{attempt+1} | 股票代码: {stock_code}")
+            if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                time.sleep(RECONNECT_TIME)
+            else:
+                log.error(f"无法获取{stock_code}有效市盈率数据，跳过")
+                raise ConsecutiveErrorException(
+                    error_code=5001,
+                    message=f"stock_a_indicator_lg连续{attempt}次接口异常，无法获取{stock_code}有效市盈率数据，跳过"
+                    )
+        except Exception as e:
+            log.error(f"stock_a_indicator_lg接口调用失败，次数{attempt+1} | 股票代码: {stock_code}")
+            if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                time.sleep(RECONNECT_TIME)
+            else:
+                log.error(f"无法获取{stock_code}有效市盈率数据，跳过")
+                raise ConsecutiveErrorException(
+                    error_code=5001,
+                    message=f"stock_a_indicator_lg连续{attempt}次接口异常，无法获取{stock_code}有效市盈率数据，跳过"
+                    )
 
 def handle_error(code: str, e: Exception, error_msg: str, counter: int):
     """统一处理错误日志和阈值判断"""
     log.error(error_msg)
-    time.sleep(2)  # 错误后延迟防止高频请求[6](@ref)
+    time.sleep(RECONNECT_TIME)  # 错误后延迟防止高频请求[6](@ref)
     
     # 触发连续错误异常
     if counter >= MAX_CONSECUTIVE_ERRORS:
@@ -166,6 +200,10 @@ class ConsecutiveErrorException(Exception):
 
 if __name__ == "__main__":
     df = insertSelectStockPE(SELECT_PATH)
+
+    #查询所有股票PE并入库
+    #df = insertSelectStockPE("all")
+
     #导出Excel并自动调整列宽[4](@ref)
     #with pd.ExcelWriter(".\output\output.xlsx") as writer:
     #    df.to_excel(writer, sheet_name="全量数据")

@@ -27,6 +27,8 @@ START_DATE = "20160501" #回测开始日期
 ISMY = False#是否检测自选True/False
 IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
 IS_BUY = False#是否直接返回量价买点
+PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
+PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
 
 
 def detect_price_volume_reversal(stock_list: pd.DataFrame, 
@@ -318,6 +320,7 @@ def get_stock_pe(stock_code: str):
 def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
     """
     检测完成后根据结果按股票代码分查询PE相关信息
+    输入： result: list[DataFrame] 包含日期，价格，成交量，5%分位地价True标识，5%分位地量True标识
     """
     resultlist = []
     passNum = 0
@@ -342,44 +345,92 @@ def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
                     last_row.get('vg_mask', False)
                     ]):
             
-                #查询检测通过股票的行业PE
+                # 1. 获取行业和个股的完整历史PE数据（不只是当前日期范围）
+                all_industry_pe = None
+                all_stock_pe = None
                 df_industry_historyPE = []
                 df_industry_historyPE = gi.get_stock_industry_pe_mysql(code)
 
 
-                # 处理 industry_info 为 None 或 empty 的情况
-                pe_history = industry_id = industry_name = pe_weighted = pe_mean = pe_median = None
+                 # 获取行业信息
+                df_industry_historyPE = gi.get_stock_industry_pe_mysql(code)
+                if df_industry_historyPE is not None:
+                    industry_info = df_industry_historyPE['industry_info']
+                    industry_code = industry_info['行业编码'].values[0]
+                    # 获取完整的行业历史PE（尽可能早的数据）
+                    all_industry_pe = gi.get_industry_pe_mysql_new_conn(industry_code)
             
-                # 先检查 df_industry_historyPE 是否为 None
-                if df_industry_historyPE is not None :
-                    industry_info = df_industry_historyPE['industry_info']  # 获取行业信息
-                    #根据行业编码获取行业历史PE
-                    pe_history = gi.get_industry_pe_mysql_new_conn(industry_info['行业编码'].values[0])
+                # 获取完整的个股历史PE（尽可能早的数据）
+                all_stock_pe = gs.get_stock_pe_his(code)
+            
+                # 2. 合并当前日期范围内的PE数据
+                #if all_industry_pe is not None:
+                #    df = pd.merge(df, all_industry_pe, how='left', on='日期', suffixes=('', '_industry'))
+                if all_stock_pe is not None:
+                    df = pd.merge(df, all_stock_pe, how='left', on='日期', suffixes=('', '_stock'))
 
-                df = pd.merge(df,pe_history,how='left',on='日期')
-
-                stock_pe_his = gs.get_stock_pe_his(code)
-                if stock_pe_his is not None and not stock_pe_his.empty:
-                     # 3. 设置索引进行高效合并
-
-                    right_df = stock_pe_his.copy()
-                    
-                    df = pd.merge(df,right_df,how='left',on='日期')
-
+                # 3. 初始化新列
+                #df['industry_pe_percentile'] = np.nan
+                df['stock_pe_percentile'] = np.nan
+                #df['industry_pe_mask'] = False
+                df['stock_pe_mask'] = False
+            
+                # 4. 5年滚动百分位计算（核心逻辑）
+                if not df.empty:
+                    # 确保日期为datetime类型并按时间排序
+                    #df['日期'] = pd.to_datetime(df['日期'])
+                    df = df.sort_values('日期')
                 
+                    # 获取完整的行业和个股历史PE数据（包含当前日期之前的所有数据）
+                    #full_industry_pe = all_industry_pe.copy() if all_industry_pe is not None else pd.DataFrame()
+                    full_stock_pe = all_stock_pe.copy() if all_stock_pe is not None else pd.DataFrame()
+                
+                    #if not full_industry_pe.empty:
+                    #    full_industry_pe['日期'] = pd.to_datetime(full_industry_pe['日期'])
+                    #    full_industry_pe = full_industry_pe.sort_values('日期').set_index('日期')
+                
+                    #if not full_stock_pe.empty:
+                        #full_stock_pe['日期'] = pd.to_datetime(full_stock_pe['日期'])
+                        #full_stock_pe = full_stock_pe.sort_values('日期').set_index('日期')
+                
+                    # 遍历每一行计算滚动百分位
+                    for i, current_date in enumerate(df.index):
+                        window_start = current_date - pd.DateOffset(years=PE_ROLLING_TIME)
+                    
+                        # 行业PE百分位计算
+                        #if not full_industry_pe.empty:
+                        #    window_data = full_industry_pe.loc[window_start:current_date - pd.DateOffset(days=1)]
+                        #    if not window_data.empty:
+                        #        current_pe = df.at[i, 'industry_pe']
+                        #        if not pd.isna(current_pe):
+                        #            # 计算百分位：小于等于当前值的比例
+                        #            rank = np.sum(window_data <= current_pe) / len(window_data)
+                        #            df.at[i, 'industry_pe_percentile'] = rank * 100
+                        #            df.at[i, 'industry_pe_mask'] = (rank * 100) <= PE_PERCENTILE
+                    
+                        # 个股PE百分位计算
+                        if not full_stock_pe.empty:
+                            window_data = full_stock_pe.loc[window_start:current_date - pd.DateOffset(days=1)][ 'pe_ttm']
+                            if not window_data.empty:
+                                current_pe = df.at[current_date, 'pe_ttm']
+                                if not pd.isna(current_pe):
+                                    rank = np.sum(window_data <= current_pe) / len(window_data)
+                                    df.at[current_date, 'stock_pe_percentile'] = rank * 100
+                                    df.at[current_date, 'stock_pe_mask'] = (rank * 100) <= PE_PERCENTILE
+            
+                # 5. 设置最终索引格式
                 df.index = pd.Index(
                     df.index.strftime('%Y%m%d'), 
                     dtype='object', 
                     name='日期'
-                ).infer_objects()
-
+                )
                 resultlist.append((str(code), df))
-
                 passNum += 1
-                time.sleep(0.3) 
+                if not IS_MYSQL: 
+                    time.sleep(0.3) 
             
         except Exception as e:
-            log.error(f"{code}获取行业信息异常: {str(e)}")
+            log.error(f"{code}获取PE信息异常: {str(e)}")
             time.sleep(0.3) 
             continue
 
@@ -415,8 +466,8 @@ def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None
                 return
 
             # 若所有Sheet均被过滤，添加默认Sheet
-            if len(writer.sheets) == 0:
-                pd.DataFrame(["无符合条件的数据"]).to_excel(writer, sheet_name="Empty")
+            #if len(writer.sheets) == 0:
+            #    pd.DataFrame(["无符合条件的数据"]).to_excel(writer, sheet_name="Empty")
             for sheet_name, df in result:
                 df.to_excel(writer, sheet_name=sheet_name, index=True)
                 passNum += 1
@@ -490,9 +541,6 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                 else:
                     # 处理 df_industry 为 None 或 empty 的情况
                     industry_id = industry_name = pe_weighted = pe_mean = pe_median = None
-
-
-
 
                 last_index = df.index[-1]  # 获取最后一行索引
                 
@@ -648,22 +696,32 @@ def detect_with_buy(path: str):
 # 每天（有空）执行检测
 if __name__ == "__main__":
     #自选文件
-    my_select=r"..\input\selectlist_my.xlsx"
+    my_select=r".\input\selectlist_my.xlsx"
     #回测N_YEARS年百分位
-    N_YEARS = 3  
+    N_YEARS = 5 
     #回测开始日期
-    START_DATE = "20160501" 
+    START_DATE = "20150601" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False
-    ISMY = False
-    #是否检测买点
-    IS_BUY = True
+    ISMY = True
 
-
-    #detect_with_allPE(my_select)
     #detect_with_lastPE(my_select)
-    detect_with_buy(my_select)
+
+    #是否检测买点
+    IS_BUY = False
+    #detect_with_buy(my_select)
+
+    PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
+    PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
+    detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
+
+    
+
+
+
+
+
 
     #my_select=r"..\input\selectlist_my.xlsx"
     ##是否检测自选True/False

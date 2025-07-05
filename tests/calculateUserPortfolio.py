@@ -34,7 +34,7 @@ BENCH_STYLES = {
     '000905': {'color': '#d62728', 'linestyle': ':', 'marker': 'o', 'markevery': 10}
     }
 
-SELECT_PATH=r"..\input\selectlist.xlsx"
+SELECT_PATH=r".\input\selectlist.xlsx"
 
 def fetch_data(user_portfolio, benchmarks, start_date='20240521', end_date='20250522'):
     """获取所选择的股票和对标指数基准的历史股价数据"""
@@ -76,7 +76,7 @@ def fetch_data(user_portfolio, benchmarks, start_date='20240521', end_date='2025
 
 def calculateSelectProtfolio(select_path=SELECT_PATH,benchmarks = BENCHMARKS,start_date='20240521', end_date='20250522') -> pd.DataFrame:
     """获取所选择的股票数据"""
-    # 默认SELECT_PATH=r"..\input\selectlist.xlsx"
+    # 默认SELECT_PATH=r".\input\selectlist.xlsx"
     df = get_select_stocks(select_path)
     user_portfolio = df['代码'].tolist()
 

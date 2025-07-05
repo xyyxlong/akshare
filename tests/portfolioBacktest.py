@@ -16,6 +16,8 @@ log = log4ak.LogManager(log_level=log4ak.INFO)
 IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
 HOLD_DAYS_CONDITION = 900 #卖出条件持仓时间 >= 600天
 RETURN_CONDITION = 3.6 #卖出条件总收益率 >= 3.6倍
+DYNAMIC_BUYMONEY = True #是否根据现有资金动态调整买入金额
+EQUAL_WEIGHT_BUY = True#是否等权买入，即每支股票只买入一次
 
 
 class PositionTracker:
@@ -44,9 +46,12 @@ class PositionTracker:
         self.code = code
         self.buy_date = buy_date
         self.shares = shares
+        self.re = 0.0 
         self.buy_fee = buy_fee
         self.dividend_tax = dividend_tax
         self.dividends = []  # 分红记录: [(date, 每股分红, 税后金额)]
+        self.dividend_income = 0.0 # 持仓分红
+        self.total_return_rate = 0.0 # 持仓收益率
 
 
         
@@ -136,24 +141,27 @@ class PositionTracker:
         :param current_price: 当前不复权价格
         :return: (市值, 累计收益，累计分红，是否触发卖出)
         """
+        if self.shares == 0:
+            return 0,self.re, self.dividend_income, self.total_return_rate, False
+
         # 1. 计算基础指标
         market_value = self.shares * current_price
         cost_value = self.shares * self.buy_price
         
         # 2. 计算累计分红（包含当日）
-        dividend_income = sum(
+        self.dividend_income = sum(
             amount for date, _, amount in self.dividends 
             if pd.to_datetime(date) <= pd.to_datetime(current_date)
         )
         
         # 3. 计算总收益和总收益率
-        total_return = (market_value - cost_value) + dividend_income
-        total_return_rate = total_return / cost_value if cost_value > 0 else 0
+        self.re = (market_value - cost_value) + self.dividend_income
+        self.total_return_rate = self.re / cost_value if cost_value > 0 else 0
         
         # 4. 检查卖出条件（使用完整收益率）
-        should_sell = self._check_sell_conditions(current_date, total_return_rate)
+        should_sell = self._check_sell_conditions(current_date, self.total_return_rate)
         
-        return market_value, total_return, dividend_income, total_return_rate, should_sell
+        return market_value, self.re, self.dividend_income, self.total_return_rate, should_sell
 
 class PortfolioSimulator:
     """
@@ -179,6 +187,7 @@ class PortfolioSimulator:
 
         self.initial_cash = initial_cash #初始本金
         self.current_cash = initial_cash #初始现金
+        self.buymoney = 0.0
         self.start_date = start_date #组合回测开始时间
         self.buy_fee = buy_fee #买入费率 (默认0.17%)
         self.dividend_tax = dividend_tax  #分红税率 (默认10%)
@@ -191,8 +200,10 @@ class PortfolioSimulator:
         self.price_cache = {}
         # 新增回测结束日期存储
         self.backtest_end_date = None
-        # 新增：待处理订单列表[3](@ref)
+        #待处理，已处理订单列表
         self.pending_orders = [] 
+        self.executed_orders = []
+        
 
         #akshare接口连续失败调用的上限以及失败次数记录
         self.MAX_TRYTIMES = 3
@@ -263,11 +274,11 @@ class PortfolioSimulator:
         trade_dates['trade_date'] = pd.to_datetime(trade_dates['trade_date'])
         return trade_dates[trade_dates['trade_date'] >= pd.to_datetime(start_date)]['trade_date'].dt.strftime('%Y%m%d').tolist()
     
-    def buy_stock(self, code: str, buy_date: str, buymoney: float) -> bool:
+    def buy_stock(self, code: str, buy_date: str, buymoney:float) -> bool:
         """买入下单处理，仅记录订单，不立即扣款"""
 
         #等权买入，即每支股票只买入一次的时候激活如下代码
-        if any(order[0] == code for order in self.pending_orders):
+        if EQUAL_WEIGHT_BUY and any(order[0] == code for order in self.pending_orders):
             log.error(f"{code}已有待处理订单")
             return False
             
@@ -294,7 +305,7 @@ class PortfolioSimulator:
         创建持仓时需要根据买入日期查询股票价格
         """
 
-        executed_orders = []
+        #executed_orders = []
         #强制日期格式转换
 
         for order in self.pending_orders:
@@ -312,9 +323,21 @@ class PortfolioSimulator:
                 price_df = self.price_cache[code]
                 close_price = price_df.loc[current_date, '收盘']
                 actual_price = close_price * (1 + self.buy_fee)
+
+                #根据剩余现金和订单量计算买入资金
+                pending_orders_num = len(self.pending_orders)
+                executed_orders_num = len(self.executed_orders)
+                waiting_orders_num = pending_orders_num - executed_orders_num
+
+                #是否根据现金动态调整买入金额
+                if DYNAMIC_BUYMONEY:                    
+                    self.buymoney = self.current_cash/waiting_orders_num if waiting_orders_num != 0.0 else 0.0
+                else:
+                    self.buymoney = self.initial_cash/pending_orders_num
+                log.info(f"每单可买入资金 = {self.buymoney}")
                 
                 # 计算成本
-                shares = math.ceil(buymoney/(actual_price*100))*100
+                shares = math.floor(self.buymoney/(actual_price*100))*100
                 cost = shares*actual_price
 
                 
@@ -324,16 +347,25 @@ class PortfolioSimulator:
                     
                 # 扣减现金
                 self.current_cash -= cost
+
+                if EQUAL_WEIGHT_BUY:
+                    # 创建持仓
+                    position = PositionTracker(
+                        code, current_date, shares,
+                        self.buy_fee, self.dividend_tax,
+                        actual_price  # 直接传入计算好的价格
+                    )
+                    self.positions[code] = position
+                else:
+                    self.positions[code].buy_date = current_date
+                    self.positions[code].shares += shares
+                    self.positions[code].buy_price = actual_price
+                    
                 
-                # 创建持仓
-                position = PositionTracker(
-                    code, current_date, shares,
-                    self.buy_fee, self.dividend_tax,
-                    actual_price  # 直接传入计算好的价格
-                )
-                self.positions[code] = position
-                executed_orders.append(order)
-                log.info(f"{current_date}执行买入: {code} {shares}股 @ {actual_price:.2f}元")
+
+                
+                self.executed_orders.append(order)
+                log.info(f"{current_date}执行买入: {code} {shares}股计{cost}元 @ {actual_price:.2f}元")
                 # 容错：自动补充缓存
                 if code not in self.price_cache:
                     self._cache_stock_data(code, self.start_date, self.backtest_end_date)
@@ -495,7 +527,7 @@ class PortfolioSimulator:
 
 
         for code in to_remove:
-            del self.positions[code]
+            self.positions[code].shares = 0
         
         # 计算总值
         result['total_value'] = self.current_cash + result['positions_value']
@@ -587,7 +619,8 @@ def get_portfolio_stocks(select_path=".\input\selectlist_my.xlsx") -> pd.DataFra
 
 
     # 数据清洗
-    se_df.drop_duplicates(subset=['code'], keep='first', inplace=True) #每支股票只买一次，等权购买，如果注释也就是可以不等权
+    if EQUAL_WEIGHT_BUY:
+        se_df.drop_duplicates(subset=['code'], keep='first', inplace=True) #每支股票只买一次，等权购买，如果注释也就是可以不等权
     se_df.sort_values(by='buydate', inplace=True)
     
     return se_df[['code', 'buydate']]
@@ -606,7 +639,7 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
     )
     
     # 从excel创建股票订单
-    buy_df = get_portfolio_stocks(r".\input\detect_rev_BUY_20250701_my.xlsx").dropna(axis=0, how='any')
+    buy_df = get_portfolio_stocks(r".\input\detect_rev_BUY_20250703.xlsx").dropna(axis=0, how='any')
     # 订单数量，用于计算每次等权购买可用的资金
     order_amount = len(buy_df)
     buymoney = ini_cash /order_amount * 2
@@ -619,7 +652,7 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
         #amount = row['amount']
         #amount_100 = math.floor(amount/100)*100
         #if amount_100<100 : amount_100=100            
-        simulator.buy_stock(code, buydate, buymoney)
+        simulator.buy_stock(code, buydate, 0)
     
     # 运行回测
     end_date = "20250703"

@@ -192,13 +192,13 @@ if __name__ == "__main__":
     stock_codes = None
     
     # 股票代码列表（示例）
-    #stock_codes = pd.DataFrame(data=['002466','600096'],columns=['代码'])
+    stock_codes = pd.DataFrame(data=['600900'],columns=['代码'])
     
     # 批量处理股票
     processor.batch_process_stocks(
         stock_codes=stock_codes,
         period="daily",
-        adjust=""
+        adjust="qfq"
     )
     
     # 从数据库查询示例

@@ -8,7 +8,7 @@ import log4ak
 def testlog() -> None:
     log = log4ak.LogManager(log_level=log4ak.ERROR)
 
-
+df = ak.stock_a_lg_indicator()
 
 
 

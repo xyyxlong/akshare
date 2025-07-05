@@ -216,7 +216,7 @@ CREATE TABLE stock_historical_data_qfq (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='002466' AND DATE='2010-08-31'
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' AND DATE>'2010-06-01'
 SELECT COUNT(*) FROM stock_historical_data_qfq
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq

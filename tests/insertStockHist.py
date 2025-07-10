@@ -68,7 +68,7 @@ class StockHistoricalData:
                 return df
                 
             except Exception as e:
-                log.error(f"获取{stock_code}历史数据失败(尝试{attempt+1}/{self.MAX_RETRY}): {e}")
+                log.error(f"获取{stock_code}历史数据失败(尝试{attempt+1}/{self.MAX_TRYTIMES}): {e}")
                 if attempt < self.MAX_TRYTIMES - 1:
                     time.sleep(self.AK_TRY_FAILD_SLEEPTIME)
                 else:
@@ -121,7 +121,9 @@ class StockHistoricalData:
         :param end_date: 结束日期
         """
         if stock_codes is None:
-            stock_codes = get_select_stocks()#对自选列表进行处理
+            #stock_codes = get_select_stocks()#对自选列表进行处理
+            stock_codes = get_all_stocks()#对全列表进行处理
+
 
         total_inserted = 0
 
@@ -192,13 +194,19 @@ if __name__ == "__main__":
     stock_codes = None
     
     # 股票代码列表（示例）
-    stock_codes = pd.DataFrame(data=['600900'],columns=['代码'])
+    #stock_codes = pd.DataFrame(data=['600900'],columns=['代码'])
     
     # 批量处理股票
     processor.batch_process_stocks(
         stock_codes=stock_codes,
         period="daily",
         adjust="qfq"
+    )
+
+    processor.batch_process_stocks(
+    stock_codes=stock_codes,
+    period="daily",
+    adjust=""
     )
     
     # 从数据库查询示例

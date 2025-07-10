@@ -97,7 +97,7 @@ def convert_revenue_unit(rev_str):
 
 
 if __name__ == "__main__":
-    df=get_quarterly_revenue("000001",5)
+    df=get_quarterly_revenue("000858",5)
     print(df)
     recent_qoq=df['QoQ'].tolist()
     print(check_revenue_decline(recent_qoq,countQ=3, everyQ=2, decline=-5))

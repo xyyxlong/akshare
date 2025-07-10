@@ -51,8 +51,12 @@ def insert_to_mysql(datapd, insertSqlStr):
             log.info("insert finished!")
             return "insert finished!"
                 
-    except MySQLError as err:
-        log.error(f"Database error: {err.code} {err.msg}")
+    except MySQLError as e:
+        if e.args[0] in (1062, 1586):  # 忽略主键冲突错误
+            log.info(f"错误码({e.args[0]})，出现主键冲突，已忽略。{e}")
+            pass
+        else:
+            raise 
     finally:
         if conn and conn.open:
             conn.close()
@@ -76,9 +80,7 @@ def _execute_batch_insert(cursor, data,insert_sql):
             log.info(f"错误码({e.args[0]})，出现主键冲突，已忽略。{e}")
             pass
         else:
-            raise
-
-
+            raise 
 
 
 def insert_batch_insert(data,insert_sql):
@@ -95,10 +97,12 @@ def insert_batch_insert(data,insert_sql):
             return cursor.rowcount
     except MySQLError as e:
         if e.args[0] in (1062, 1586):  # 忽略主键冲突错误
+            log.info(f"错误码({e.args[0]})，出现主键冲突，已忽略。{e}")
             pass
         else:
-            log.error(f"Database error: {e.code} {e.msg}")
-            conn.rollback()
+            log.error(f"Database error: {e}")
+            if conn and conn.open:
+                conn.rollback()
             raise
     finally:
         if conn and conn.open:
@@ -125,7 +129,38 @@ def _execute_query(sql: str, params: tuple = ()) -> Optional[List[Tuple]]:
         log.error(f"{params}数据库查询失败: {str(e)}")
         return None, None
     finally:
-        if conn:
+        if conn and conn.open:
+            conn.close()
+
+def getdata_fetchall(sql: str, params: tuple = ()) -> pd.DataFrame:
+    """
+    通过Mysql获取数据的接口
+    """
+    try:
+        # 建立数据库连接
+        with pymysql.connect(**DB_CONFIG) as conn:
+            # 创建游标对象
+            with conn.cursor() as cursor:
+                log.debug(f"执行SQL查询: {sql}，参数: {params}")
+                
+                # 执行查询 - 使用参数化查询确保安全
+                cursor.execute(sql, params)
+                results = cursor.fetchall()
+                
+                # 转换结果为DataFrame
+                df = pd.DataFrame(results)                
+                
+                log.info(f"从数据库获取到 {len(df)} 条历史PE数据")
+                return df
+            
+    except pymysql.Error as dberr:
+        log.error(f"数据库查询错误: {dberr}")
+        return pd.DataFrame()
+    except Exception as e:
+        log.error(f"查询历史PE数据时发生未知异常: {e}")
+        return pd.DataFrame()
+    finally:
+        if conn and conn.open:
             conn.close()
 
 

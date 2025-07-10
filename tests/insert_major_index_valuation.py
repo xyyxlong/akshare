@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import akshare as ak
 from tqdm import tqdm
 import insert2Mysql as ins
@@ -53,11 +54,91 @@ def get_major_index_valuation():
     
     return "insert finished!"
 
+def get_index_pe_his(index_name: str) -> pd.DataFrame:
+    """
+    查询指定股票所有历史PE数据
+    
+    返回格式:
+    DataFrame包含列: 
+        trade_date (str): 交易日期 (YYYY-MM-DD格式)
+        pe (float): 静态市盈率
+        pe_ttm (float): 滚动市盈率(TTM)
+        
+    无数据时返回空DataFrame
+    """
+
+    HISTORY_SQL = """
+        SELECT 
+            trade_date AS `日期`, 
+            index_code,index_name,index_value,
+            pe_equal_weight_static,pe_static,pe_static_median,
+            pe_equal_weight_ttm,pe_ttm,pe_ttm_median  
+        FROM index_valuation_history 
+        WHERE index_name = %s 
+        ORDER BY trade_date
+    """
+    df = ins.getdata_fetchall(HISTORY_SQL,(index_name,))
+    return df
+
+def get_pe_percentile(df: pd.DataFrame, testdate: str, year_window: int) -> float:
+    """
+    计算指定日期指数PE在历史数据中的时间百分位
+    
+    参数:
+        df (pd.DataFrame): get_index_pe_his()返回的历史PE数据
+        testdate (str): 查询日期 (YYYY-MM-DD格式)
+        year_window (int): 回测时间窗口(年数)
+        
+    返回:
+        float: PE时间百分位值(0-100之间)
+        
+    异常处理:
+        无数据时返回np.nan
+    """
+    # 1. 数据预处理
+    # 复制数据避免修改原DataFrame
+    df = df.copy()
+    
+    # 转换日期格式并过滤有效数据
+    df['日期'] = pd.to_datetime(df['日期'])
+    df = df.sort_values('日期').dropna(subset=['pe_ttm'])
+    
+    # 2. 确定时间窗口范围
+    test_date = pd.to_datetime(testdate)
+    start_date = test_date - pd.DateOffset(years=year_window)
+    
+    # 3. 提取窗口内数据
+    window_mask = (df['日期'] >= start_date) & (df['日期'] <= test_date)
+    if not window_mask.any():
+        return np.nan
+    
+    window_df = df.loc[window_mask].copy()
+    window_pe = window_df['pe_ttm'].values
+    
+    # 4. 获取测试日PE值
+    testday_pe = window_df.loc[window_df['日期'] == test_date, 'pe_ttm'].values
+    if len(testday_pe) == 0:
+        # 如果测试日无数据，使用最近交易日的PE
+        prev_days = window_df[window_df['日期'] < test_date]
+        if prev_days.empty:
+            return np.nan
+        testday_pe = prev_days.iloc[-1]['pe_ttm']
+    
+    # 5. 计算百分位[3,4](@ref)
+    sorted_pe = np.sort(window_pe)
+    # 计算小于等于当前PE的数据点数量[5](@ref)
+    count_below = np.searchsorted(sorted_pe, testday_pe, side='right')
+    
+    # 6. 计算百分位值[7](@ref)
+    percentile = (count_below / len(sorted_pe)) * 100
+    
+    return  percentile[0].astype(float) # 保留两位小数
 
 if __name__ == "__main__":
     # 使用示例
-    df = get_major_index_valuation()
-    #df = ak.stock_index_pe_lg('沪深300')
+    #df = get_major_index_valuation()
+    df = get_index_pe_his('沪深300')
+    percent = get_pe_percentile(df, "20250704",3)
     #df = df.iloc[0:2]
 
-    print(df)
+    print(percent)

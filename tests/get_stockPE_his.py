@@ -58,7 +58,8 @@ def get_stock_pe_his(stock_code: str) -> pd.DataFrame:
         SELECT 
             trade_date AS `日期`, 
             pe, 
-            pe_ttm 
+            pe_ttm,
+            dv_ratio 
         FROM stock_pe_history 
         WHERE stock_code = %s 
         ORDER BY trade_date
@@ -72,6 +73,61 @@ def get_stock_pe_his(stock_code: str) -> pd.DataFrame:
                 
                 # 执行查询 - 使用参数化查询确保安全
                 cursor.execute(HISTORY_SQL, (stock_code,))
+                results = cursor.fetchall()
+                
+                # 转换结果为DataFrame
+                df = pd.DataFrame(results)
+                
+                # 类型转换处理
+                if not df.empty:
+                    df['日期'] = pd.to_datetime(df['日期'])
+                    df.set_index('日期', inplace=True)
+                    
+                #    df['pe'] = df['pe'].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
+                #    df['pe_ttm'] = df['pe_ttm'].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
+                
+                log.info(f"{stock_code}从数据库获取到 {len(df)} 条历史PE数据")
+                return df
+            
+    except pymysql.Error as dberr:
+        log.error(f"数据库查询错误: {dberr}")
+        return pd.DataFrame()
+    except Exception as e:
+        log.error(f"查询历史PE数据时发生未知异常: {e}")
+        return pd.DataFrame()
+
+def get_stock_pe(stock_code: str, tradedate: str) -> pd.DataFrame:
+    """
+    查询指定股票指定日期PE数据
+    
+    返回格式:
+    DataFrame包含列: 
+        trade_date (str): 交易日期 (YYYY-MM-DD格式)
+        pe (float): 静态市盈率
+        pe_ttm (float): 滚动市盈率(TTM)
+        
+    无数据时返回空DataFrame
+    """
+
+    HISTORY_SQL = """
+        SELECT 
+            trade_date AS `日期`, 
+            pe, 
+            pe_ttm,
+            dv_ratio 
+        FROM stock_pe_history 
+        WHERE stock_code = %s 
+        AND trade_date = %s 
+    """
+    try:
+        # 建立数据库连接
+        with pymysql.connect(**DB_CONFIG) as conn:
+            # 创建游标对象
+            with conn.cursor() as cursor:
+                log.debug(f"执行SQL查询: {HISTORY_SQL}，参数: {stock_code}")
+                
+                # 执行查询 - 使用参数化查询确保安全
+                cursor.execute(HISTORY_SQL, (stock_code,tradedate,))
                 results = cursor.fetchall()
                 
                 # 转换结果为DataFrame
@@ -327,11 +383,19 @@ def test_pe_service():
     print(f"\n测试用例3: 测试部分数据的股票 {edge_code}")
     df_edge = get_stock_pe_his(edge_code)
     if not df_edge.empty:
-        min_date = df_edge['trade_date'].min()
-        max_date = df_edge['trade_date'].max()
+        min_date = df_edge.index.min()
+        max_date = df_edge.index.max()
         print(f"数据时间范围: {min_date} 至 {max_date}")
     else:
         print(f"未找到股票{edge_code}的数据")
+
+    # 测试用例4: 无效股票代码
+    oneday = "20250124"
+    df_oneday = get_stock_pe("600519",oneday)
+    if not df_oneday.empty:
+        print(f"获取600519在{oneday}数据: {df_oneday}")
+    else:
+        print(f"未找到股票600519在{oneday}的数据")
 
 if __name__ == "__main__":
     #test_pe_calculator()

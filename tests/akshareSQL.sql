@@ -67,7 +67,18 @@ COMMENT='指数历史估值表';
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 
 SELECT * FROM `index_valuation_history` WHERE `index_name`="沪深300" ORDER BY `trade_date` DESC
+SELECT DISTINCT index_name FROM index_valuation_history
 SELECT COUNT(*) FROM index_valuation_history
+SELECT index_code, index_name, trade_date
+FROM (
+    SELECT 
+        index_code, 
+        index_name, 
+        trade_date,
+        ROW_NUMBER() OVER (PARTITION BY index_code ORDER BY trade_date ASC) AS rn
+    FROM index_valuation_history
+) AS subquery
+WHERE rn = 1;
 
 -- 股票历史估值表
 CREATE TABLE `stock_pe_history` (
@@ -114,10 +125,11 @@ VALUES
 ("000333","美的集团",'2015-01-05',23.6896,12.2867,3.3073,2.6774,2.6774,1.0413,0.9241,12596835.71),
 ("000333","美的集团",'2015-01-06',25.1404,13.0392,3.5099,2.5229,2.5229,1.105,0.9807,13368328.66);
 
+SELECT COUNT(DISTINCT stock_pe_history.`stock_code`) AS Num_pe FROM stock_pe_history
 SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="002460" ORDER BY `trade_date` DESC
+SELECT * FROM `stock_pe_history`  WHERE stock_code="600750" ORDER BY `trade_date` DESC
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
-SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="002460"  AND  trade_date = "20240620" 
+SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="301090"  AND  trade_date = "20240620" 
 SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_code IN 
 ("600036","000858","601919","000333","002555","002602","002460","002738")
 
@@ -125,7 +137,7 @@ SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_
         FROM stock_pe_history 
         WHERE stock_code = "002466"
         ORDER BY trade_date DESC
-
+`dv_ratio`
  
 -- 分红信息表
 CREATE TABLE dividend_info (
@@ -143,8 +155,8 @@ CREATE TABLE dividend_info (
     UNIQUE KEY (stock_code, announcement_date)
 ) COMMENT '股票分红信息表';
 
-SELECT * FROM dividend_info
-SELECT COUNT(*) FROM dividend_info
+SELECT * FROM dividend_info WHERE stock_code = '600348' ORDER BY `ex_dividend_date` DESC
+SELECT COUNT(*) FROM dividend_info WHERE stock_code IN ('300146','600183','600596','600598','600618','601336')
 SELECT COUNT(DISTINCT stock_code) FROM dividend_info
 
 -- 配股信息表
@@ -190,8 +202,8 @@ CREATE TABLE stock_historical_data (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data WHERE stock_code='002466' AND DATE='2010-08-31'
-SELECT * FROM stock_historical_data ORDER BY DATE DESC
+SELECT * FROM stock_historical_data WHERE stock_code='603713' AND DATE< '2018-07-31' and DATE> '2018-06-30'  ORDER BY DATE DESC
+SELECT * FROM stock_historical_data WHERE stock_code='600750' order by date DESC
 SELECT COUNT(*) FROM stock_historical_data
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data
 SELECT DISTINCT stock_code FROM stock_historical_data
@@ -216,7 +228,7 @@ CREATE TABLE stock_historical_data_qfq (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' AND DATE>'2010-06-01'
+SELECT * FROM stock_historical_data_qfq where stock_code='600900' and DATE>'2010-06-01'
 SELECT COUNT(*) FROM stock_historical_data_qfq
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq

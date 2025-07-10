@@ -8,6 +8,7 @@ from getAllStock import get_all_stocks, get_select_stocks
 import get_industry_historyPE as gi
 import get_stockPE_his as gs
 import insertStockHist as ish
+import insert_major_index_valuation as imiv
 import commTools as ct
 from datetime import datetime, timedelta
 import log4ak
@@ -22,13 +23,17 @@ GROUNDVOLUME = 0.05 #地价地量阈值检测时间内5%分位
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 N_YEARS = 3  #回测N_YEARS年百分位
-START_DATE = "20160501" #回测开始日期
+START_DATE = "20190501" #回测开始日期
 
 ISMY = False#是否检测自选True/False
 IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
-IS_BUY = False#是否直接返回量价买点
-PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
+IS_BUY = True#是否直接返回量价买点
+PE_ROLLING_TIME = 3 #滚动PE百分位时间配置，默认5年
 PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
+EQUAL_WEIGHT_BUY = True#是否等权买入，即每支股票只买入一次
+IS_BUY_K = True#是否加入指数PE分位系数
+PE_PERCENTILE_YEAR = 3#PE分位回溯时长（年）
+DF_HS300PETTM = imiv.get_index_pe_his('沪深300') if IS_BUY_K else None
 
 
 def detect_price_volume_reversal(stock_list: pd.DataFrame, 
@@ -159,9 +164,10 @@ def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list:
     signals_list = []
     last_valid_signal_date = None
     MIN_DAYS_BETWEEN_SIGNALS = 30
-    excluded_early_signals = 0
-    MAX_EARLY_SIGNALS_TO_EXCLUDE = 2
+    excluded_early_signals = 1
+    MAX_EARLY_SIGNALS_TO_EXCLUDE = 3 #第几次新低才发起信号，3波浪理论
 
+    log.debug(f"历史数据最早日期：{hist_data.index[0]}")
     # 创建联合条件掩码
     hist_data['both_mask'] = hist_data['p_mask'] & hist_data['v_mask']
 
@@ -177,7 +183,7 @@ def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list:
 
     # 提取满足条件的日期和价格
     consecutive_dates = consecutive_mask[consecutive_mask == True].index
-
+        
     # 按区块分组处理信号
     current_block = -1
     for date in consecutive_dates:
@@ -185,8 +191,9 @@ def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list:
     
         # 条件1：跳过前两次信号
         if excluded_early_signals < MAX_EARLY_SIGNALS_TO_EXCLUDE:
-            excluded_early_signals += 1
+            
             log.info(f"{code}排除早期信号 #{excluded_early_signals} @ {date}")
+            excluded_early_signals += 1
             continue
         
         # 条件2：检查30天内是否已有有效信号
@@ -199,17 +206,31 @@ def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list:
         # 新区块的第一个信号
         if block_id != current_block:
             price = hist_data.loc[date, '收盘']
+
+            # 获取指定日期的PE
+            onedayPE = gs.get_stock_pe(code,date.strftime('%Y%m%d'))            
+            #判断指定日期股息率>
+            dv_ratio =  onedayPE['dv_ratio'].iloc[0] if onedayPE is not None else -1
+
+            hs300PEttm_percentile = imiv.get_pe_percentile(DF_HS300PETTM,date.strftime('%Y%m%d'), PE_PERCENTILE_YEAR) if IS_BUY_K else 0
         
             # 记录有效信号
             signals_list.append({
                 'A股代码': code,
                 'buydate': date,
-                'price': price
+                'price': price,
+                'dv_ratio':dv_ratio,
+                '300%':  '{:.2f}'.format(hs300PEttm_percentile)
             })
             last_valid_signal_date = date
             current_block = block_id
         
             log.info(f"ok {code}有效信号 @ {date} (区块:{block_id})")
+
+            #如果等权买入，每支股票只录入第一个信号
+            if EQUAL_WEIGHT_BUY:
+                break
+
         else:
             log.info(f"pass {code}同区块跳过 @ {date}")
     return signals_list
@@ -696,11 +717,11 @@ def detect_with_buy(path: str):
 # 每天（有空）执行检测
 if __name__ == "__main__":
     #自选文件
-    my_select=r".\input\selectlist_my.xlsx"
+    my_select=r".\input\selectlist_dv.xlsx"
     #回测N_YEARS年百分位
-    N_YEARS = 5 
+    N_YEARS = 3 
     #回测开始日期
-    START_DATE = "20150601" 
+    START_DATE = "20160601" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False
@@ -709,12 +730,12 @@ if __name__ == "__main__":
     #detect_with_lastPE(my_select)
 
     #是否检测买点
-    IS_BUY = False
-    #detect_with_buy(my_select)
+    IS_BUY = True
+    detect_with_buy(my_select)
 
-    PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
-    PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
-    detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
+    #PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
+    #PE_PERCENTILE = 3 #滚动PE百分位阈值配置，默认5%
+    #detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
 
     
 

@@ -13,11 +13,11 @@ log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
-RECONNECT_TIME = 30 #断线重连休眠时间
+RECONNECT_TIME = 60 #断线重连休眠时间
 
 SELECT_PATH=r".\input\selectlist.xlsx"
 
-CHUNK_NUM = 1# 分块数量处理设置
+CHUNK_NUM = 30# 分块数量处理设置
 
 INSERT_SQL ="""
     INSERT IGNORE INTO `stock_pe_history` 
@@ -34,14 +34,13 @@ def insertSelectStockPE(path = SELECT_PATH):
         stock_zh_a_spot_df = get_select_stocks(path)
 
     log.info("获取到所选的 A 股上市公司列表")
-    df_stock = stock_zh_a_spot_df[['代码','名称']]
+    df_stock = stock_zh_a_spot_df[['代码','名称']]#[2868:]
 
     # 分块处理设置[2,3](@ref)
     total_rows = len(df_stock)
     
     chunk_indices = np.array_split(np.arange(total_rows), CHUNK_NUM)
     log.info(f"分块处理设置总记录数total_rows={total_rows}；块数CHUNK_NUM={CHUNK_NUM}，每块记录数chunk_indices={len(chunk_indices[0])}")
-    df_result = pd.DataFrame(columns=['stock_code','stock_name','trade_date','pe','pe_ttm','pb', 'dv_ratio', 'dv_ttm', 'ps', 'ps_ttm', 'total_mv'])
       
     # 直接存储处理后的元组列表
     batch_data = []
@@ -55,6 +54,7 @@ def insertSelectStockPE(path = SELECT_PATH):
         chunk_df = df_stock.iloc[chunk_idx]
         log.info(f"开始处理第{file_num+1}批数据，包含{len(chunk_df)}条记录")
         checkcount = 0
+        df_result = pd.DataFrame(columns=['stock_code','stock_name','trade_date','pe','pe_ttm','pb', 'dv_ratio', 'dv_ttm', 'ps', 'ps_ttm', 'total_mv'])
         
         # 处理单个数据块
         for row_index, row in tqdm(chunk_df.iterrows(), total=len(chunk_df), desc=f"处理第{file_num+1}批\n"):
@@ -68,7 +68,15 @@ def insertSelectStockPE(path = SELECT_PATH):
                 dfpe=get_pe_condition(r_code)
                 log.debug(f"获取到{r_code}历史PE，数据块:{dfpe}")
 
-                batch_data.append(r_code, r_name, patch_pe_data(dfpe))
+                # 使用assign实现向量化赋值
+                dfpe = dfpe.assign(**{
+                    'stock_code': r_code,
+                    'stock_name': r_name
+                    })
+
+                #df数据合并
+                df_result = pd.concat([df_result, dfpe], ignore_index=True)
+                log.info(f"df_result数据块合并后大小为:{len(df_result)}")
 
                 error_count = 0  # 成功执行后重置计数器[6](@ref)
                 log.info(f"功执行后重置计数器error_count={error_count}")
@@ -95,55 +103,47 @@ def insertSelectStockPE(path = SELECT_PATH):
         # 分块存储[1,5](@ref)
 
         log.info(f"第{file_num+1}批数据已获取，包含{len(df_result)}条记录")
-
-
+        #已经合并好的df数据进行入库数据封装：1，转list按行处理。2，Nan->None。
+        batch_data = process_pe_data_batch(df_result)
+        #调用数据库接口存储入库
+        ins.insert_to_mysql(batch_data, INSERT_SQL)
 
     # 所有数据处理完成后插入数据库
     log.info(f"所有数据已处理完成，共{len(batch_data)}条记录")
-    ins.insert_to_mysql(batch_data, INSERT_SQL)
+
 
     return "所有分块处理完成"
 
-def patch_pe_data(r_code:str, r_name:str, df: pd.DataFrame) :
+# 一次性处理所有列，避免逐行循环
+def process_pe_data_batch(df) -> list:
     """
-    封把装df数据到存储的元组列表中
+    封把装df数据到存储的列表中
     """
-    # 直接存储处理后的元组列表
+   # 1. 定义目标列和数值列
+    target_cols = ['stock_code', 'stock_name', 'trade_date', 
+                   'pe', 'pe_ttm', 'pb', 'dv_ratio', 
+                   'dv_ttm', 'ps', 'ps_ttm', 'total_mv']
+    #num_cols = ['pe', 'pe_ttm', 'pb', 'dv_ratio', 'dv_ttm', 'ps', 'ps_ttm', 'total_mv']
+    
+    # 2. 复制数据避免污染原数据
+    df = df[target_cols].copy()
+    
+    ## 3. 向量化替换 NaN 为 None，且跳过类型转换 [7,9](@ref)
+    ## 说明：MySQL 不支持 NaN，必须转为 None（对应 SQL NULL）
+    #for col in num_cols:
+    #    df[col] = df[col].replace({np.nan: None}).astype(float, errors='ignore')
+    
+    # 4. 安全转换为列表（确保 None 不被转为 NaN）
     batch_data = []
-    # 使用assign实现向量化赋值
-
-    if df is not None:
-        df = df.assign(**{
-            'stock_code': r_code,
-            'stock_name': r_name
-            })
-
-        # 直接处理PE数据并添加到batch_data
-        for _, pe_row in df.iterrows():
-            processed_row = process_pe_data(pe_row)
-            batch_data.append(processed_row)
+    for row in df.itertuples(index=False):
+        # 显式处理每个元素，防止隐式转换 [7](@ref)
+        processed_row = tuple(
+            None if pd.isna(item) else item  # 二次检查确保无 NaN 残留
+            for item in row
+        )
+        batch_data.append(processed_row)
 
     return batch_data
-
-
-def process_pe_data(row):
-    """
-    处理单行PE数据，将NaN转换为None
-    """
-    return (
-        row['stock_code'],
-        row['stock_name'],
-        row['trade_date'],
-        None if pd.isna(row['pe']) else float(row['pe']),
-        None if pd.isna(row['pe_ttm']) else float(row['pe_ttm']),
-        None if pd.isna(row['pb']) else float(row['pb']),
-        None if pd.isna(row['dv_ratio']) else float(row['dv_ratio']),
-        None if pd.isna(row['dv_ttm']) else float(row['dv_ttm']),
-        None if pd.isna(row['ps']) else float(row['ps']),
-        None if pd.isna(row['ps_ttm']) else float(row['ps_ttm']),
-        None if pd.isna(row['total_mv']) else float(row['total_mv'])
-    )
-
 
 def get_pe_condition(stock_code="601398"):
     # 获取历史PE信息
@@ -165,7 +165,7 @@ def get_pe_condition(stock_code="601398"):
                 log.error(f"无法获取{stock_code}有效市盈率数据，跳过")
                 raise ConsecutiveErrorException(
                     error_code=5001,
-                    message=f"stock_a_indicator_lg连续{attempt}次接口异常，无法获取{stock_code}有效市盈率数据，跳过"
+                    message=f"{stock_code}连续{attempt+1}次调用stock_a_indicator_lg接口异常"
                     )
         except Exception as e:
             log.error(f"stock_a_indicator_lg接口调用失败，次数{attempt+1} | 股票代码: {stock_code}")
@@ -175,7 +175,7 @@ def get_pe_condition(stock_code="601398"):
                 log.error(f"无法获取{stock_code}有效市盈率数据，跳过")
                 raise ConsecutiveErrorException(
                     error_code=5001,
-                    message=f"stock_a_indicator_lg连续{attempt}次接口异常，无法获取{stock_code}有效市盈率数据，跳过"
+                    message=f"{stock_code}连续{attempt+1}次调用stock_a_indicator_lg接口异常"
                     )
 
 def handle_error(code: str, e: Exception, error_msg: str, counter: int):
@@ -199,10 +199,11 @@ class ConsecutiveErrorException(Exception):
 
 
 if __name__ == "__main__":
-    df = insertSelectStockPE(SELECT_PATH)
+    #df = insertSelectStockPE(SELECT_PATH)
 
     #查询所有股票PE并入库
-    #df = insertSelectStockPE("all")
+    
+    df = insertSelectStockPE("all")
 
     #导出Excel并自动调整列宽[4](@ref)
     #with pd.ExcelWriter(".\output\output.xlsx") as writer:

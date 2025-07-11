@@ -13,19 +13,21 @@ import get_stockPE_his as gsh
 
 ##运行配置：
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
-MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
+
+MAX_CONSECUTIVE_ERRORS = 5  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
-RECONNECT_TIME = 30 #断线重连休眠时间
-CHUNK_NUM = 1# 全市场数据过多分10块处理
-ISMY = True #是否选取自选配置False/True
+RECONNECT_TIME = 60 #断线重连休眠时间
+CHUNK_NUM = 10# 全市场数据过多分10块处理
+ISMY = False #是否选取自选配置False/True
 IS_MYSQL = True  #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
 
 ##选股参数设置：
-STARTYEAR = "2019"  #计算的起始年份
+STARTDATE = "20130701"  #计算的起始日期
+STARTYEAR = STARTDATE[:4]  #计算的起始年份
+TESTYEAR = 5 #计算从startyear开始5年的净资产收益率，经营性现金流，负债率，应收账款周期
+
 ROE = 15 #过去几年来平均净资产收益率高于15%
 PEMAX = 25 #过去几天平均市盈率低于25且大于0
-PASTDAY = 30 #过去30天
-PASTYEAR = 5 #计算过去5年的净资产收益率，经营性现金流，负债率，应收账款周期
 DEBT_RATIOS = 70 #负债率低于70%     风险
 RECEIVABLE_DAYS = 30  #应收账款周期小于30  行业地位
 CASH2PROFIT = 1.25 #经营性现金流/净利润比例>1.1  保证赚的是真钱
@@ -69,7 +71,7 @@ def selectStock():
                 log.info(f"处理第{file_num+1}批第{checkcount}条记录：{r_code}")
 
                 # 指标计算
-                var1, var2, var3, var4, var5 = checkRoeCashEBIT(r_code, STARTYEAR)
+                var1, var2, var3, var4, var5 = checkRoeCashEBIT(r_code)
                 #varAll = var1 and var2 and var3 and var4 and var5
                 #log.info(f"第{file_num+1}批第{checkcount}条记录处理结果varAll={varAll}")
 
@@ -89,7 +91,7 @@ def selectStock():
                     #'综合评估': varAll
                 }
                 error_count = 0  # 成功执行后重置计数器[6](@ref)
-                log.info(f"功执行后重置计数器error_count={error_count}")
+                log.debug(f"功执行后重置计数器error_count={error_count}")
                 time.sleep(2)
             except AttributeError as e:
                 error_count += 1  # 捕获特定异常时计数[6](@ref)
@@ -111,24 +113,25 @@ def selectStock():
                     break  # 达到阈值终止循环
         
         # 分块存储[1,5](@ref)
-        df_result.to_excel(f'.\output\select_result_{file_num}.xlsx', index=False)
-        log.info(f"第{file_num+1}批数据已存储，包含{len(df_result)}条记录")
+        df_result.to_excel(f'.\output\select_result_{STARTDATE}_{TESTYEAR}year_{file_num}.xlsx', index=False)
+        log.info(f"第{file_num+1}批数据已存入excel，包含{len(df_result)}条记录")
     
     return "所有分块处理完成"
 
-def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
+def checkRoeCashEBIT(r_code="601398"):
     """
     优化说明：
     1. 新增var4（5年资产负债率<=70%）和var5（应收账款周转天数<30天）指标
     2. 增强NaN值处理机制
     3. 优化数据校验逻辑
     """
+
     for attempt in range(MAX_CONSECUTIVE_ERRORS):
         try:
-            log.info(f"{r_code} 获取 {startyear} 至今财报数据")
+            #log.info(f"{r_code} 获取 {STARTYEAR} 至今财报数据")
         
             with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(ak.stock_financial_analysis_indicator, symbol=r_code, start_year=startyear)
+                future = executor.submit(ak.stock_financial_analysis_indicator, symbol=r_code, start_year=STARTYEAR)
 
                 try:
                     df = future.result(timeout=OUTTIME)
@@ -173,37 +176,30 @@ def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
         if col in clean_df.columns:
             clean_df[col] = pd.to_numeric(clean_df[col].replace('--', np.nan), errors='coerce')
     
-    
-
-    
-    # 指标5：应收账款周转天数(增强NaN处理)
-    receivable_values = clean_df['receivable_days'].tail(TESTYEAR).dropna()
-    var5 = '{:.2f}'.format(receivable_values.mean())
-
-
     # 指标1：平均ROE
-    roe_values = clean_df['净资产收益率(%)'].head(PASTYEAR)
-    var1 = '{:.2f}'.format(roe_values.mean()) if len(roe_values) >= PASTYEAR else None
+    roe_values = clean_df['净资产收益率(%)'].tail(TESTYEAR)
+    var1 = '{:.2f}'.format(roe_values.mean()) if len(roe_values) >= TESTYEAR else None
     
     # 指标2：近几年经营现金流/收益
     #cash_flow = clean_df['每股经营性现金流(元)'].head(1)
     #var2 = len(cash_flow) > 0 and cash_flow.iloc[0] > 0
-    cash_flow  = clean_df['每股经营性现金流(元)'].head(PASTYEAR)
+    cash_flow  = clean_df['每股经营性现金流(元)'].tail(TESTYEAR)
     cash_flow_pers = cash_flow.fillna(0).mean()
-    profit_values_pers = clean_df['扣除非经常性损益后的每股收益(元)'].head(PASTYEAR).fillna(0).mean()
-    var2 =  '{:.2f}'.format(cash_flow_pers/profit_values_pers) 
+    profit_values_pers = clean_df['扣除非经常性损益后的每股收益(元)'].tail(TESTYEAR).fillna(0).mean()
+    var2 =  '{:.2f}'.format(cash_flow_pers/profit_values_pers)
     
     # 指标3：最新净利润/前5年平均
     clean_df = clean_df.rename(columns={'扣除非经常性损益后的净利润(元)': '扣非净利润'})
-    profit_value_lastyear = clean_df['扣非净利润'].copy().fillna(0).iloc[0]
-    var3 = '{:.2f}'.format(profit_value_lastyear / clean_df['扣非净利润'].dropna().iloc[1:PASTYEAR+1].mean())
+    profit_value_lastyear = clean_df['扣非净利润'].copy().fillna(0).iloc[-TESTYEAR]
+    var3 = '{:.2f}'.format(profit_value_lastyear / clean_df['扣非净利润'].dropna().iloc[-TESTYEAR:].mean())
     
+    # ================= 新增指标 ================= 
     # 指标4：过去5年平均资产负债率(增强NaN处理)
-    debt_ratios = clean_df['debt_ratio'].head(PASTYEAR).dropna()
+    debt_ratios = clean_df['debt_ratio'].tail(TESTYEAR).dropna()
     var4 = '{:.2f}'.format(debt_ratios.mean())
     
     # 指标5：应收账款周转天数(增强NaN处理)
-    receivable_values = clean_df['receivable_days'].head(PASTYEAR).dropna()    
+    receivable_values = clean_df['receivable_days'].tail(TESTYEAR).dropna()
     var5 = '{:.2f}'.format(receivable_values.mean())
     
     # 日志记录（包含有效数值）
@@ -220,7 +216,7 @@ def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
 
 
 
-def check_pe_condition(stock_code="601398",stock_name="", pastday=PASTDAY):
+def check_pe_condition(stock_code="601398",stock_name=""):
     """
     获取pe_ttm，ratio
     可以通过数据库获取，也可以通过网路获取
@@ -244,42 +240,39 @@ def check_pe_condition(stock_code="601398",stock_name="", pastday=PASTDAY):
         log.error(f"{stock_code}数据库中无有效市盈率数据")
         return 0.0, False       
     
-    # 日期处理优化（网页[3][3](@ref)数据格式）
-    date_threshold = datetime.datetime.now() - datetime.timedelta(pastday)
-    year_threshold = datetime.datetime.now() - datetime.timedelta(PASTYEAR * 365)
-    date_threshold = date_threshold.date()
-    year_threshold = year_threshold.date()
+    # 日期处理优化（网页[3][3](@ref)数据格式）    
+    start_date = pd.to_datetime(STARTDATE)
+    end_date = start_date + datetime.timedelta(TESTYEAR * 365)
+    #year_threshold = datetime.datetime.now() - datetime.timedelta(TESTYEAR * 250)
+    start_threshold = start_date.date()
+    end_threshold = end_date.date()
 
     pe_ttm = None
     dv_ratio = None
     
     # PE数据清洗与计算（网页[1][1](@ref)字段说明）
     valid_df = df[
-        pd.to_datetime(df['trade_date']).dt.date > date_threshold
+        (pd.to_datetime(df['trade_date']).dt.date >= start_threshold) & (pd.to_datetime(df['trade_date']).dt.date <= end_threshold)
     ].copy()
-        
+      
     null_count = valid_df['pe_ttm'].isnull().sum()
     if null_count > 0:
-        log.info(f"{stock_code}在{pastday}天之内有{null_count}条pe_ttm空值")
+        log.info(f"{stock_code}在{start_threshold}至{end_threshold}间有{null_count}条pe_ttm空值")
 
     # pe_ttm的空值不处理，直接求平均值（因为pe小是更好的）
     pe_ttm = '{:.2f}'.format(valid_df['pe_ttm'].astype(float).mean())
 
-    # dv_ratio数据清洗与计算（网页[1][1](@ref)字段说明）
-    valid_df = df[
-        pd.to_datetime(df['trade_date']).dt.date > year_threshold
-    ].copy()
-        
+    # dv_ratio数据计算（网页[1][1](@ref)字段说明）
     null_count = valid_df['dv_ratio'].isnull().sum()
     if null_count > 0:
-        log.info(f"{stock_code}在{year_threshold}之后有{null_count}条股息率空值（已填充为0）")
-
+        log.info(f"{stock_code}在{start_threshold}至{end_threshold}间有{null_count}条股息率空值（已填充为0）")
+        
     # 处理空值：将dv_ratio中的空值填充为0
     valid_df['dv_ratio'] = valid_df['dv_ratio'].fillna(0)
     dv_ratio = '{:.2f}'.format(valid_df['dv_ratio'].astype(float).mean())
 
-    log.info(f"{stock_code}近{pastday}天内pe_ttm={pe_ttm}")
-    log.info(f"{stock_code}近{PASTYEAR}年内股息率 dv_ratio={dv_ratio}")
+    log.debug(f"{stock_code}在{start_threshold}至{end_threshold}间pe_ttm={pe_ttm}")
+    log.debug(f"{stock_code}在{start_threshold}至{end_threshold}间股息率 dv_ratio={dv_ratio}")
 
     return pe_ttm, dv_ratio
 
@@ -360,7 +353,7 @@ class ConsecutiveErrorException(Exception):
         super().__init__(self.message)
 
 if __name__ == "__main__":
-    #time.sleep(600)
+    #time.sleep(3600)
     df = selectStock()
     #df=ak.stock_financial_analysis_indicator("600519","2023")
     #cc = df.columns.values

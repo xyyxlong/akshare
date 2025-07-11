@@ -1,4 +1,5 @@
-﻿import pandas as pd
+﻿import os
+import pandas as pd
 from pathlib import Path
 import akshare as ak
 import time
@@ -8,9 +9,9 @@ from pandas.core.frame import DataFrame
 import xlsxwriter
 
 # 注意将列表excel以下列名字放在py文件相同目录下
-SH_PATH=r".\input\shanghailist.xlsx"
-SZ_PATH=r".\input\shenzhenlist.xlsx"
-SELECT_PATH=r".\input\selectlist.xlsx"
+SH_PATH=r"..\input\shanghailist.xlsx"
+SZ_PATH=r"..\input\shenzhenlist.xlsx"
+SELECT_PATH=r"..\input\selectlist.xlsx"
 IPOTIMEFILTER="20220522"
 
 def get_all_stocks(sh_path=SH_PATH, sz_path=SZ_PATH) -> pd.DataFrame:
@@ -22,7 +23,9 @@ def get_all_stocks(sh_path=SH_PATH, sz_path=SZ_PATH) -> pd.DataFrame:
     """
     # 读取上海数据[1,3](@ref)
     sh_cols = {'A股代码':'代码', '证券简称':'名称','上市日期':'上市日期'}
-    sh_df = pd.read_excel(sh_path,
+    base_path = Path(__file__).parent
+    sh_df = pd.read_excel(
+        base_path / sh_path,
         usecols=list(sh_cols.keys()),
         dtype={'A股代码': str}
     ).rename(columns=sh_cols)
@@ -31,7 +34,8 @@ def get_all_stocks(sh_path=SH_PATH, sz_path=SZ_PATH) -> pd.DataFrame:
 
     # 读取深圳数据[2,4](@ref)
     sz_cols = {'A股代码':'代码', 'A股简称':'名称','A股上市日期':'上市日期'}
-    sz_df = pd.read_excel(sz_path,
+    sz_df = pd.read_excel(
+        base_path / sz_path,
         usecols=list(sz_cols.keys()),
         dtype={'A股代码': str}
     ).rename(columns=sz_cols)
@@ -56,7 +60,9 @@ def get_select_stocks(select_path=SELECT_PATH) -> pd.DataFrame:
     """
     # 读取上海数据[1,3](@ref)
     se_cols = {'A股代码':'代码', '证券简称':'名称'}
-    se_df = pd.read_excel(select_path,
+    base_path = Path(__file__).parent
+    se_df = pd.read_excel(
+        base_path / select_path,
         usecols=list(se_cols.keys()),
         dtype={'A股代码': str}
     ).rename(columns=se_cols)

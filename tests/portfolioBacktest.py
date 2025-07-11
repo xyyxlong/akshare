@@ -11,18 +11,25 @@ import insertDividendInfo as idi
 import insert_major_index_valuation as imiv
 
 # 日志配置
-log = log4ak.LogManager(log_level=log4ak.INFO)
+log = log4ak.LogManager(log_level=log4ak.ERROR)
 
 
 IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
-HOLD_DAYS_CONDITION = 1305 #卖出条件持仓时间 >= 1305天
-RETURN_CONDITION = 4.2 #卖出条件总收益率 >= 3.6倍
+
+#买入策略参数
 DYNAMIC_BUYMONEY = True #是否根据现有资金动态调整买入金额
 EQUAL_WEIGHT_BUY = True#是否等权买入，即每支股票只买入一次
 IS_BUY_K = True #是否加入指数PE分位系数
 PE_PERCENTILE_YEAR = 3#PE分位回溯时长（年）
 BUY_MAX_K = 2 #指数PE分位系数上限
 BUY_MIN_K = 0.3 #指数PE分位系数下限
+
+#卖出策略参数
+HOLD_DAYS_CONDITION = 1305 #卖出条件持仓时间 >= 1305天
+RETURN_CONDITION = 3 #卖出条件总收益率 >= 3.6倍
+DRAWDOWN = -1000#卖出回撤阈值15%，设为-1000该配置无效
+
+
 
 
 class PositionTracker:
@@ -108,7 +115,7 @@ class PositionTracker:
         log.info(f"{self.code}在{dividend_date}分红: 每股{dividend_per_share:.4f}元 -> 税后{net_dividend:.4f}元")
         return total_net_dividend
     
-    def _check_sell_conditions(self, current_date: str, total_return_rate: float) -> bool:
+    def _check_sell_conditions(self, current_price: float,current_date: str, total_return_rate: float) -> bool:
         """
         检查卖出条件（使用完整收益率）
         条件1：持仓时间 >= 600天
@@ -118,23 +125,31 @@ class PositionTracker:
         if self.shares == 0:
             return False
 
+        isSale = False
+
         # 计算持仓天数
         current_dt = pd.to_datetime(current_date)
         buy_dt = pd.to_datetime(self.buy_date)
         hold_days = (current_dt - buy_dt).days
         
-        # 条件检查
+        # 1,时间和收益条件检查
         time_condition = hold_days >= HOLD_DAYS_CONDITION
         return_condition = total_return_rate >= RETURN_CONDITION
-        
+
+        # 2，回撤检查
+        if time_condition or return_condition:
+            if current_price/self.max_price < 1- DRAWDOWN/100:
+                isSale = True
+
         # 详细日志
         log.debug(
-            f"{self.code} 卖出检查 @ {current_date}: "
-            f"持仓{hold_days}天/总收益率{total_return_rate:.2f}x "
-            f"结果={'卖出' if time_condition or return_condition else '持有'}"
-        )
-        
-        return time_condition or return_condition
+                    f"{self.code} 卖出检查 @ {current_date}: "
+                    f"持仓{hold_days}天/总收益率{total_return_rate:.2f}x "
+                    f"当前价格{current_price}，最高最高价格{self.max_price}"
+                    f"结果={'卖出' if isSale else '持有'}"
+                ) 
+
+        return isSale
 
     def calculate_daily_positionvalues(
         self, 
@@ -153,6 +168,7 @@ class PositionTracker:
         # 1. 计算基础指标
         market_value = self.shares * current_price
         cost_value = self.shares * self.buy_price
+        if current_price > self.max_price: self.max_price = current_price 
         
         # 2. 计算累计分红（包含当日）
         self.dividend_income = sum(
@@ -165,7 +181,7 @@ class PositionTracker:
         self.total_return_rate = self.re / cost_value if cost_value > 0 else 0
         
         # 4. 检查卖出条件（使用完整收益率）
-        should_sell = self._check_sell_conditions(current_date, self.total_return_rate)
+        should_sell = self._check_sell_conditions(current_price, current_date, self.total_return_rate)
         
         return market_value, self.re, self.dividend_income, self.total_return_rate, should_sell
 
@@ -643,7 +659,7 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
     # 初始化组合
     simulator = PortfolioSimulator(
         initial_cash=ini_cash,
-        start_date="20180701",
+        start_date="20180703",
         isSaveStock = False #excel中是否要存储各股票每天的价格，用作手工校验
     )
     

@@ -1,4 +1,6 @@
-﻿import akshare as ak
+﻿import os
+from pathlib import Path
+import akshare as ak
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -10,8 +12,8 @@ import insertStockHist as ish
 import insertDividendInfo as idi
 import insert_major_index_valuation as imiv
 
-# 日志配置
-log = log4ak.LogManager(log_level=log4ak.ERROR)
+base_path = Path(__file__).parent #系统绝对目录
+log = log4ak.LogManager(log_level=log4ak.ERROR)# 日志配置
 
 
 IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
@@ -628,7 +630,7 @@ class PortfolioSimulator:
         
         return pd.DataFrame(results)
 
-def get_portfolio_stocks(select_path=".\input\selectlist_my.xlsx") -> pd.DataFrame:
+def get_portfolio_stocks(select_path=base_path /"..\input\selectlist_my.xlsx") -> pd.DataFrame:
     """
     读取特定选中股票列表，返回标准化代码与简称
     :param SELECT_PATH: 选中股票文件路径
@@ -664,7 +666,7 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
     )
     
     # 从excel创建股票订单
-    buy_df = get_portfolio_stocks(r".\input\buy_roe_dv_20180701.xlsx").dropna(axis=0, how='any')
+    buy_df = get_portfolio_stocks(base_path /f"..\input\buy_roe_dv_20180701.xlsx").dropna(axis=0, how='any')
     # 订单数量，用于计算每次等权购买可用的资金
     order_amount = len(buy_df)
     buymoney = ini_cash /order_amount * 2
@@ -684,7 +686,7 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
     results = simulator.run_backtest(end_date)
     
     # 保存结果
-    results.to_excel(f".\output\portfolio_backtest_{end_date}.xlsx", index=False)
+    results.to_excel(base_path /f"..\output\portfolio_backtest_{end_date}.xlsx", index=False)
     print(f"回测完成，结果已保存到 portfolio_backtest_{end_date}.xlsx")
     
     # 打印最后5天结果

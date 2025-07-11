@@ -136,9 +136,9 @@ def get_pe_percentile(df: pd.DataFrame, testdate: str, year_window: int) -> floa
 
 if __name__ == "__main__":
     # 使用示例
-    #df = get_major_index_valuation()
-    df = get_index_pe_his('沪深300')
-    percent = get_pe_percentile(df, "20250704",3)
+    df = get_major_index_valuation()
+    #df = get_index_pe_his('沪深300')
+    #percent = get_pe_percentile(df, "20250704",3)
     #df = df.iloc[0:2]
 
-    print(percent)
+    #print(percent)

@@ -1,4 +1,6 @@
-﻿import time
+﻿import os
+from pathlib import Path
+import time
 import numpy as np
 import akshare as ak
 import pandas as pd
@@ -13,8 +15,9 @@ import commTools as ct
 from datetime import datetime, timedelta
 import log4ak
 
-
+base_path = Path(__file__).parent #系统绝对目录
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
+
 
 KEEPDAY = 5
 DODUP = 0.12 #连续5个交易日放量平均增长率15%
@@ -641,9 +644,9 @@ def detect_with_allPE(path: str):
 
     end_date = datetime.now().strftime("%Y%m%d")
     if ISMY:
-        filename = f'.\output\detect\detect_rev_allPE_{end_date}_my.xlsx'
+        filename =base_path / f'..\output\detect\detect_rev_allPE_{end_date}_my.xlsx'
     else:
-        filename = f'.\output\detect\detect_rev_allPE_{end_date}.xlsx'
+        filename =base_path / f'..\output\detect\detect_rev_allPE_{end_date}.xlsx'
 
     log.info(f"检查成功检测数：{len(write_df)}")
 
@@ -671,9 +674,9 @@ def detect_with_lastPE(path: str):
     result = detect_price_volume_reversal(test_stocks, start_date = START_DATE, n_years = N_YEARS)
     end_date = datetime.now().strftime("%Y%m%d")
     if ISMY:
-        filename = f'.\output\detect\detect_rev_lastPE_{end_date}_my.xlsx'
+        filename =base_path / f'..\output\detect\detect_rev_lastPE_{end_date}_my.xlsx'
     else:
-        filename = f'.\output\detect\detect_rev_lastPE_{end_date}.xlsx'
+        filename =base_path / f'..\output\detect\detect_rev_lastPE_{end_date}.xlsx'
     
     log.info(f"检查成功检测数：{len(result)}")
 
@@ -706,9 +709,9 @@ def detect_with_buy(path: str):
 
     end_date = datetime.now().strftime("%Y%m%d")
     if ISMY:
-        filename = f'.\output\detect\detect_rev_BUY_{end_date}_my.xlsx'
+        filename =base_path / f'..\output\detect\detect_rev_BUY_{end_date}_my.xlsx'
     else:
-        filename = f'.\output\detect\detect_rev_BUY_{end_date}.xlsx'
+        filename =base_path / f'..\output\detect\detect_rev_BUY_{end_date}.xlsx'
 
     log.info(f"检查成功检测数：{len(result)}")
 
@@ -717,11 +720,11 @@ def detect_with_buy(path: str):
 # 每天（有空）执行检测
 if __name__ == "__main__":
     #自选文件
-    my_select=r".\input\selectlist_dv.xlsx"
+    my_select= base_path / r"..\input\selectlist_my.xlsx"
     #回测N_YEARS年百分位
     N_YEARS = 3 
     #回测开始日期
-    START_DATE = "20160601" 
+    START_DATE = "20180601" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False
@@ -730,12 +733,12 @@ if __name__ == "__main__":
     #detect_with_lastPE(my_select)
 
     #是否检测买点
-    IS_BUY = True
-    detect_with_buy(my_select)
+    IS_BUY = False
+    #detect_with_buy(my_select)
 
-    #PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
-    #PE_PERCENTILE = 3 #滚动PE百分位阈值配置，默认5%
-    #detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
+    PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
+    PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
+    detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
 
     
 

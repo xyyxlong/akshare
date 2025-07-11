@@ -203,7 +203,7 @@ if __name__ == "__main__":
    
     stocklist = None
 
-    stocklist = pd.DataFrame(data=['300146','600183','600596','600598','600618','601336'],columns=['代码'])
+    #stocklist = pd.DataFrame(data=['300146','600183','600596','600598','600618','601336'],columns=['代码'])
 
     insert_selectStock(stocklist)#对自选列表进行处理
     

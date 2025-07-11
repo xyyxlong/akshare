@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 import time
 import numpy as np
 import akshare as ak
@@ -12,7 +14,8 @@ import insert2Mysql as ins
 import get_stockPE_his as gsh
 
 ##运行配置：
-log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
+base_path = Path(__file__).parent #系统绝对目录
+log = log4ak.LogManager(log_level=log4ak.ERROR)# 日志配置
 
 MAX_CONSECUTIVE_ERRORS = 5  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
@@ -113,7 +116,7 @@ def selectStock():
                     break  # 达到阈值终止循环
         
         # 分块存储[1,5](@ref)
-        df_result.to_excel(f'.\output\select_result_{STARTDATE}_{TESTYEAR}year_{file_num}.xlsx', index=False)
+        df_result.to_excel(base_path / f'..\output\select_result_{STARTDATE}_{TESTYEAR}year_{file_num}.xlsx', index=False)
         log.info(f"第{file_num+1}批数据已存入excel，包含{len(df_result)}条记录")
     
     return "所有分块处理完成"

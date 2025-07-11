@@ -15,7 +15,6 @@ MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 RECONNECT_TIME = 60 #断线重连休眠时间
 
-SELECT_PATH=r".\input\selectlist.xlsx"
 
 CHUNK_NUM = 30# 分块数量处理设置
 
@@ -26,12 +25,12 @@ INSERT_SQL ="""
     (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """
 
-def insertSelectStockPE(path = SELECT_PATH):
+def insertSelectStockPE(path:str):
     ## 存入所选的A股上市公司历史PE
     if path == "all":
         stock_zh_a_spot_df = get_all_stocks()
     else:
-        stock_zh_a_spot_df = get_select_stocks(path)
+        stock_zh_a_spot_df = get_select_stocks()
 
     log.info("获取到所选的 A 股上市公司列表")
     df_stock = stock_zh_a_spot_df[['代码','名称']]#[2868:]
@@ -203,7 +202,7 @@ if __name__ == "__main__":
 
     #查询所有股票PE并入库
     
-    df = insertSelectStockPE("all")
+    df = insertSelectStockPE("")#all
 
     #导出Excel并自动调整列宽[4](@ref)
     #with pd.ExcelWriter(".\output\output.xlsx") as writer:

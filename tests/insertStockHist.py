@@ -121,8 +121,8 @@ class StockHistoricalData:
         :param end_date: 结束日期
         """
         if stock_codes is None:
-            #stock_codes = get_select_stocks()#对自选列表进行处理
-            stock_codes = get_all_stocks()#对全列表进行处理
+            stock_codes = get_select_stocks()#对自选列表进行处理
+            #stock_codes = get_all_stocks()#对全列表进行处理
 
 
         total_inserted = 0

@@ -1,5 +1,6 @@
 ﻿import logging
 import os
+from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from typing import Optional
 
@@ -42,8 +43,9 @@ class LogManager:
             return
 
         # 目录结构初始化
-        self.log_dir = log_dir
-        self._init_log_dirs(log_dir)
+        self.base_path = Path(__file__).parent
+        self.log_dir = self.base_path / log_dir
+        self._init_log_dirs(self.log_dir)
         
         # 主记录器配置
         self.logger = logging.getLogger("SmartLogger")

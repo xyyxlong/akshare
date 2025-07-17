@@ -1,4 +1,5 @@
 ﻿import pandas as pd
+import numpy as np
 import akshare as ak
 import pymysql
 from datetime import datetime, timedelta
@@ -150,6 +151,56 @@ def get_stock_pe(stock_code: str, tradedate: str) -> pd.DataFrame:
     except Exception as e:
         log.error(f"查询历史PE数据时发生未知异常: {e}")
         return pd.DataFrame()
+
+def calculate_pe_time_percentile(stock_code: str, testyears: int) -> pd.DataFrame:
+    """
+    计算股票历史PE时间百分位
+    :param stock_code: 股票代码（示例：'600519'）
+    :param testyears: 回测周期（年）
+    :return: DataFrame包含日期、PE值和时间百分位
+    """
+    # 1. 获取历史PE数据（替换为您的实际数据接口）
+    # 这里用示例数据代替实际接口
+    end_date = datetime.today().strftime('%Y%m%d')
+    start_date = (datetime.today() - timedelta(days=testyears*365)).strftime('%Y%m%d')
+    
+    df = get_stock_pe_his(stock_code)
+    
+    # 2. 计算时间百分位（核心逻辑）
+    result = []
+    # 按索引日期排序确保时间顺序正确
+    df = df.sort_index()
+    
+    # 直接遍历索引日期[3,5](@ref)
+    for current_date in df.index:
+        current_pe = df.loc[current_date, 'pe_ttm']
+        
+        # 计算时间窗口：当前日期前 testyears 年
+        window_start = current_date - pd.DateOffset(years=testyears)
+        
+        # 获取窗口内的历史数据（使用索引切片）[1,5](@ref)
+        window_data = df.loc[window_start:current_date]
+        
+        # 计算当前PE在历史中的百分位
+        if len(window_data) > 0:
+            lower_count = np.sum(window_data['pe_ttm'] < current_pe)
+            percentile = (lower_count / len(window_data)) * 100
+        else:
+            percentile = 0
+        
+        result.append({
+            'date': current_date.strftime('%Y%m%d'),
+            'pe_ttm': current_pe,
+            'pettm_per': round(percentile, 2)
+        })
+    
+    return pd.DataFrame(result)
+
+# 使用示例
+if __name__ == "__main__":
+    # 获取贵州茅台近3年PE时间百分位
+    result_df = calculate_pe_time_percentile('600519', 3)
+    print(result_df.head())
 
 def get_stock_pe_percentile(code: str, statyears: int, getdate: str = None) -> dict:
     """
@@ -400,3 +451,5 @@ def test_pe_service():
 if __name__ == "__main__":
     #test_pe_calculator()
     test_pe_service()
+    #df = calculate_pe_time_percentile('600900',5)
+    #print(df)

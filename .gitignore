@@ -30,3 +30,4 @@ colors
 /input/~$buy_roe_dv_20180701.xlsx
 /input/~$detect_DV_BUY_20190729.xlsx
 /output/~$portfolio_backtest_20250704_roe+dv.xlsx
+/tests/log

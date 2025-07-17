@@ -12,22 +12,23 @@ from getAllStock import get_all_stocks, get_select_stocks, ipodatefilter_stocks
 import insertSelectStockPE as issp
 import insert2Mysql as ins
 import get_stockPE_his as gsh
+import insertStockReport as isr
 
 ##运行配置：
 base_path = Path(__file__).parent #系统绝对目录
-log = log4ak.LogManager(log_level=log4ak.ERROR)# 日志配置
+log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 
-MAX_CONSECUTIVE_ERRORS = 5  # 最大允许连续错误次数
+MAX_CONSECUTIVE_ERRORS = 25  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
-RECONNECT_TIME = 60 #断线重连休眠时间
-CHUNK_NUM = 10# 全市场数据过多分10块处理
+RECONNECT_TIME = 60 #断线重连休眠时间,stock_financial_analysis_indicator接口会封禁10分钟。
+CHUNK_NUM = 1# 全市场数据过多分10块处理
 ISMY = False #是否选取自选配置False/True
 IS_MYSQL = True  #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
 
 ##选股参数设置：
-STARTDATE = "20130701"  #计算的起始日期
+STARTDATE = "20220701"  #计算的起始日期
 STARTYEAR = STARTDATE[:4]  #计算的起始年份
-TESTYEAR = 5 #计算从startyear开始5年的净资产收益率，经营性现金流，负债率，应收账款周期
+TESTYEAR = 2 #计算从startyear开始5年的净资产收益率，经营性现金流，负债率，应收账款周期
 
 ROE = 15 #过去几年来平均净资产收益率高于15%
 PEMAX = 25 #过去几天平均市盈率低于25且大于0
@@ -46,7 +47,7 @@ def selectStock():
         stock_zh_a_spot_df = ipodatefilter_stocks(df,f"{STARTYEAR}0101") #对上市时间进行筛选
  
     log.info(f"获取到 A 股上市公司列表，是否只选取自选股：{ISMY}")
-    df_stock = stock_zh_a_spot_df[['代码','名称']]#[339:]
+    df_stock = stock_zh_a_spot_df[['代码','名称']]#[1254:]
 
     # 分块处理设置[2,3](@ref)
     total_rows = len(df_stock)
@@ -61,7 +62,7 @@ def selectStock():
     for file_num, chunk_idx in enumerate(chunk_indices):
         
         chunk_df = df_stock.iloc[chunk_idx]
-        df_result = pd.DataFrame(columns=['stock','name','ROI','现金','净利','负债','回款','pe_ttm','ratio'])
+        df_result = pd.DataFrame(columns=['stock','name','ROE','现金','净利','负债','回款','pe_ttm','ratio'])
         log.info(f"开始处理第{file_num+1}批数据，包含{len(chunk_df)}条记录")
         checkcount = 0
         
@@ -84,7 +85,7 @@ def selectStock():
                 df_result.loc[row_index] = {
                     'stock': r_code,
                     'name': r_name,
-                    'ROI': var1,
+                    'ROE': var1,
                     '现金': var2,
                     '净利': var3,
                     '负债': var4,
@@ -95,7 +96,7 @@ def selectStock():
                 }
                 error_count = 0  # 成功执行后重置计数器[6](@ref)
                 log.debug(f"功执行后重置计数器error_count={error_count}")
-                time.sleep(2)
+                if not IS_MYSQL : time.sleep(5)
             except AttributeError as e:
                 error_count += 1  # 捕获特定异常时计数[6](@ref)
                 errormsg=f"股票{r_code}解析失败: {str(e)}。连续次数{error_count}"
@@ -128,37 +129,42 @@ def checkRoeCashEBIT(r_code="601398"):
     2. 增强NaN值处理机制
     3. 优化数据校验逻辑
     """
-
-    for attempt in range(MAX_CONSECUTIVE_ERRORS):
-        try:
-            #log.info(f"{r_code} 获取 {STARTYEAR} 至今财报数据")
+    if IS_MYSQL:
+        df = isr.get_stockfin_data_from_mysql(r_code)
         
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(ak.stock_financial_analysis_indicator, symbol=r_code, start_year=STARTYEAR)
+    if not IS_MYSQL or df is None :
+        for attempt in range(MAX_CONSECUTIVE_ERRORS):
+            try:
+                #log.info(f"{r_code} 获取 {STARTYEAR} 至今财报数据")
+        
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(ak.stock_financial_analysis_indicator, symbol=r_code, start_year=STARTYEAR)
 
-                try:
-                    df = future.result(timeout=OUTTIME)
-                except TimeoutError:
-                    # 显式关闭线程池（强制取消未完成的任务）
-                    executor.shutdown(wait=False, cancel_futures=True)  # Python 3.9+ 支持[7](@ref)
-                    raise TimeoutError(f"任务超时，已强制终止")
+                    try:
+                        df = future.result(timeout=OUTTIME)
+                    except TimeoutError:
+                        # 显式关闭线程池（强制取消未完成的任务）
+                        executor.shutdown(wait=False, cancel_futures=True)  # Python 3.9+ 支持[7](@ref)
+                        raise TimeoutError(f"任务超时，已强制终止")
 
-            break
+                break
     
-        except TimeoutError:
-            log.error(f"checkRoeCashEBIT接口调用超时，次数{attempt+1} | 股票代码: {r_code}")
-            if attempt < MAX_CONSECUTIVE_ERRORS - 1:
-                time.sleep(RECONNECT_TIME)
-            else:
-                log.error(f"无法获取{r_code}的财报数据，跳过")
-                return None, None, None, None, None
-        except Exception as e:
-            log.error(f"checkRoeCashEBIT接口调用失败，次数{attempt+1} | 股票代码: {r_code}")
-            if attempt < MAX_CONSECUTIVE_ERRORS - 1:
-                time.sleep(RECONNECT_TIME)
-            else:
-                log.error(f"无法获取{r_code}的财报数据，跳过")
-                return None, None, None, None, None
+            except TimeoutError:
+                log.error(f"checkRoeCashEBIT接口调用超时，次数{attempt+1} | 股票代码: {r_code}")
+                if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                    time.sleep(RECONNECT_TIME)
+                else:
+                    log.error(f"无法获取{r_code}的财报数据，跳过")
+                    return None, None, None, None, None
+            except Exception as e:
+                log.error(f"checkRoeCashEBIT接口调用失败，次数{attempt+1} | 股票代码: {r_code}，错误信息:{str(e)}")
+                if attempt < MAX_CONSECUTIVE_ERRORS - 1:
+                    time.sleep(RECONNECT_TIME)
+                else:
+                    log.error(f"无法获取{r_code}的财报数据，跳过")
+                    return None, None, None, None, None
+
+    
         
     # 数据清洗和字段处理
     clean_df = df.rename(columns={
@@ -194,7 +200,7 @@ def checkRoeCashEBIT(r_code="601398"):
     # 指标3：最新净利润/前5年平均
     clean_df = clean_df.rename(columns={'扣除非经常性损益后的净利润(元)': '扣非净利润'})
     profit_value_lastyear = clean_df['扣非净利润'].copy().fillna(0).iloc[-TESTYEAR]
-    var3 = '{:.2f}'.format(profit_value_lastyear / clean_df['扣非净利润'].dropna().iloc[-TESTYEAR:].mean())
+    var3 = '{:.2f}'.format(float(profit_value_lastyear) / clean_df['扣非净利润'].dropna().iloc[-TESTYEAR:].mean())
     
     # ================= 新增指标 ================= 
     # 指标4：过去5年平均资产负债率(增强NaN处理)

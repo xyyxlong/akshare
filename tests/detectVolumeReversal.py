@@ -19,23 +19,26 @@ base_path = Path(__file__).parent #系统绝对目录
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 
 
-KEEPDAY = 5
+KEEPDAY = 3
 DODUP = 0.12 #连续5个交易日放量平均增长率15%
 GROUNDVOLUME = 0.05 #地价地量阈值检测时间内5%分位
 
 MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 N_YEARS = 3  #回测N_YEARS年百分位
-START_DATE = "20190501" #回测开始日期
+START_DATE = "20160701" #回测开始日期
 
-ISMY = False#是否检测自选True/False
+ISMY_SELECT = False#是否检测自选True/False
+ISALL = False#是否对所有检测标的输出结果True/False
 IS_MYSQL = True #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
-IS_BUY = True#是否直接返回量价买点
+IS_BUY = False#是否直接返回量价买点
+BUY_WITH_PE_PERCENTLE = False#通过PE和成交量判断买点
+
 PE_ROLLING_TIME = 3 #滚动PE百分位时间配置，默认5年
 PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
 EQUAL_WEIGHT_BUY = True#是否等权买入，即每支股票只买入一次
 IS_BUY_K = True#是否加入指数PE分位系数
-PE_PERCENTILE_YEAR = 3#PE分位回溯时长（年）
+PE300_PERCENTILE_YEAR = 3#PE分位回溯时长（年）
 DF_HS300PETTM = imiv.get_index_pe_his('沪深300') if IS_BUY_K else None
 
 
@@ -61,9 +64,11 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
     # 获取当前日期
     #today = datetime.now().strftime("%Y%m%d") # 当前日期
     
-    for idx, code in tqdm(enumerate(stock_list["代码"]), total=len(stock_list)):
-        
+    for row in stock_list.itertuples(index=False):
+        code = row[0]
+        name = row[1]
         try:
+            
             # 获取历史数据（需替换为实际数据接口）
             df = get_stock_data(code, start_date)  # 假设返回包含日期、成交额、收盘价的DataFrame
             # 添加数据有效性校验，避免停牌日零成交量的干扰
@@ -98,7 +103,7 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
 
             if IS_BUY:
 
-                signals_list.extend(test_buy_signals(code,hist_data))
+                signals_list.extend(test_buy_signals(code,name,hist_data))
 
                 ## ==== 新增：检测连续5天量价信号 ====
                 ## 创建同时满足条件的掩码
@@ -150,7 +155,7 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
         #否则返回正常检测列表
         return result
     
-def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list: 
+def test_buy_signals(code:str, name:str,hist_data: pd.DataFrame) -> list: 
     """
     检测买点信号
     1，​区块化处理​：通过block_id将连续信号分组，避免重复检测
@@ -167,12 +172,23 @@ def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list:
     signals_list = []
     last_valid_signal_date = None
     MIN_DAYS_BETWEEN_SIGNALS = 30
-    excluded_early_signals = 1
-    MAX_EARLY_SIGNALS_TO_EXCLUDE = 3 #第几次新低才发起信号，3波浪理论
+    excluded_early_signals = 0
+    MAX_EARLY_SIGNALS_TO_EXCLUDE = 2 #第几次新低才发起信号，3波浪理论
 
     log.debug(f"历史数据最早日期：{hist_data.index[0]}")
-    # 创建联合条件掩码
-    hist_data['both_mask'] = hist_data['p_mask'] & hist_data['v_mask']
+
+
+    if BUY_WITH_PE_PERCENTLE:
+        # 获取完整的个股历史PE百分位（尽可能早的数据）
+        all_stock_pe_percentle = gs.calculate_pe_time_percentile(code,PE_ROLLING_TIME)
+        hist_data  = ct.merge_on_date_str_index(hist_data, all_stock_pe_percentle)
+        # pe_ttm百分位检测条件
+        hist_data['pe_mask'] = hist_data['pettm_per'] < PE_PERCENTILE  # PE百分位低于阈值
+        # 创建联合条件掩码
+        hist_data['both_mask'] = hist_data['pe_mask'] & hist_data['v_mask']
+    else:
+        # 创建联合条件掩码
+        hist_data['both_mask'] = hist_data['p_mask'] & hist_data['v_mask']
 
     # 生成连续区块标识
     hist_data['block_id'] = (hist_data['both_mask'] != hist_data['both_mask'].shift(1)).cumsum()
@@ -180,7 +196,7 @@ def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list:
     # 检测连续5天满足条件
     consecutive_mask = (
         hist_data['both_mask']
-        .rolling(window=5)
+        .rolling(window=KEEPDAY)
         .apply(lambda x: np.all(x), raw=False)
     )
 
@@ -208,27 +224,31 @@ def test_buy_signals(code:str, hist_data: pd.DataFrame) -> list:
     
         # 新区块的第一个信号
         if block_id != current_block:
-            price = hist_data.loc[date, '收盘']
+            pp = hist_data.loc[date, 'pe_ttm'] if BUY_WITH_PE_PERCENTLE else hist_data.loc[date, '收盘']
 
             # 获取指定日期的PE
             onedayPE = gs.get_stock_pe(code,date.strftime('%Y%m%d'))            
             #判断指定日期股息率>
             dv_ratio =  onedayPE['dv_ratio'].iloc[0] if onedayPE is not None else -1
 
-            hs300PEttm_percentile = imiv.get_pe_percentile(DF_HS300PETTM,date.strftime('%Y%m%d'), PE_PERCENTILE_YEAR) if IS_BUY_K else 0
+            hs300PEttm_percentile = imiv.get_pe_percentile(DF_HS300PETTM,date.strftime('%Y%m%d'), PE300_PERCENTILE_YEAR) if IS_BUY_K else 0
         
             # 记录有效信号
             signals_list.append({
                 'A股代码': code,
                 'buydate': date,
-                'price': price,
+                'price/pe': pp,
                 'dv_ratio':dv_ratio,
-                '300%':  '{:.2f}'.format(hs300PEttm_percentile)
+                '300%':  '{:.2f}'.format(hs300PEttm_percentile),
+                '名称': name,
             })
             last_valid_signal_date = date
             current_block = block_id
+
+            #连续信号次数重置
+            excluded_early_signals=0
         
-            log.info(f"ok {code}有效信号 @ {date} (区块:{block_id})")
+            log.info(f"ok {code}有效信号 @ {date} (区块:{block_id})，重置连续信号次数{excluded_early_signals}")
 
             #如果等权买入，每支股票只录入第一个信号
             if EQUAL_WEIGHT_BUY:
@@ -360,7 +380,7 @@ def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
             # 只获取最新的一天进行价格和交易量判断，达到阈值才查询PE信息进行展示
             last_row = df.iloc[-1]
 
-            testTrue = ISMY #默认配置False，调测时改为True使用，
+            testTrue = ISALL #默认配置False，调测时改为True使用，
 
             if any([
                     testTrue,
@@ -541,7 +561,7 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
             # 只获取最新的一天进行价格和交易量判断，达到阈值才查询PE信息进行展示
             last_row = df.iloc[-1]
 
-            testTrue = ISMY #默认配置False，调测时改为True使用，
+            testTrue = ISALL #默认配置False，调测时改为True使用，
 
             if any([
                     testTrue,
@@ -630,11 +650,11 @@ def detect_with_allPE(path: str):
     my_select=path
 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
-    log.info(f"是否检测自选标的：{ISMY}")
+    log.info(f"是否检测自选标的：{ISMY_SELECT}")
     log.info(f"是否从数据库获取PE信息：{IS_MYSQL}")
 
     #选定标的
-    if ISMY:
+    if ISMY_SELECT:
         test_stocks = get_select_stocks(my_select)
     else:
         test_stocks = get_select_stocks()
@@ -643,7 +663,7 @@ def detect_with_allPE(path: str):
     write_df = getPE_after_detect(result,test_stocks)
 
     end_date = datetime.now().strftime("%Y%m%d")
-    if ISMY:
+    if ISMY_SELECT:
         filename =base_path / f'..\output\detect\detect_rev_allPE_{end_date}_my.xlsx'
     else:
         filename =base_path / f'..\output\detect\detect_rev_allPE_{end_date}.xlsx'
@@ -659,11 +679,11 @@ def detect_with_lastPE(path: str):
     """
     my_select=path
 
-    log.info(f"是否检测自选标的：{ISMY}")
+    log.info(f"是否检测自选标的：{ISMY_SELECT}")
     log.info(f"是否从数据库获取PE信息：{IS_MYSQL}")
     
     #选定标的
-    if ISMY:
+    if ISMY_SELECT:
         test_stocks = get_select_stocks(my_select)
     else:
         test_stocks = get_select_stocks() 
@@ -673,7 +693,7 @@ def detect_with_lastPE(path: str):
 
     result = detect_price_volume_reversal(test_stocks, start_date = START_DATE, n_years = N_YEARS)
     end_date = datetime.now().strftime("%Y%m%d")
-    if ISMY:
+    if ISMY_SELECT:
         filename =base_path / f'..\output\detect\detect_rev_lastPE_{end_date}_my.xlsx'
     else:
         filename =base_path / f'..\output\detect\detect_rev_lastPE_{end_date}.xlsx'
@@ -695,12 +715,12 @@ def detect_with_buy(path: str):
     my_select=path
 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
-    log.info(f"是否检测自选标的：{ISMY}")
+    log.info(f"是否检测自选标的：{ISMY_SELECT}")
     log.info(f"是否从数据库获取PE信息：{IS_MYSQL}")
 
 
     #选定标的
-    if ISMY:
+    if ISMY_SELECT:
         test_stocks = get_select_stocks(my_select)
     else:
         test_stocks = get_select_stocks()
@@ -708,7 +728,7 @@ def detect_with_buy(path: str):
     result = detect_price_volume_reversal(test_stocks, start_date = START_DATE, n_years = N_YEARS)
 
     end_date = datetime.now().strftime("%Y%m%d")
-    if ISMY:
+    if ISMY_SELECT:
         filename =base_path / f'..\output\detect\detect_rev_BUY_{end_date}_my.xlsx'
     else:
         filename =base_path / f'..\output\detect\detect_rev_BUY_{end_date}.xlsx'
@@ -724,21 +744,26 @@ if __name__ == "__main__":
     #回测N_YEARS年百分位
     N_YEARS = 3 
     #回测开始日期
-    START_DATE = "20180601" 
+    START_DATE = "20210701" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False
-    ISMY = True
+    ISMY_SELECT = False
+    #是否对所有检测标的输出结果True/False
+    ISALL = True
 
     #detect_with_lastPE(my_select)
 
     #是否检测买点
-    IS_BUY = False
-    #detect_with_buy(my_select)
+    IS_BUY = True
+    PE_ROLLING_TIME = 3 #滚动PE百分位时间配置，默认5年
+    PE_PERCENTILE = 5
+    BUY_WITH_PE_PERCENTLE = False#通过PE和成交量判断买点
+    detect_with_buy(my_select)
 
-    PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
-    PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
-    detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
+    #PE_ROLLING_TIME = 3 #滚动PE百分位时间配置，默认5年
+    #PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
+    #detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
 
     
 
@@ -749,15 +774,15 @@ if __name__ == "__main__":
 
     #my_select=r"..\input\selectlist_my.xlsx"
     ##是否检测自选True/False
-    #ISMY = True
+    #ISMY_SELECT = True
     ##PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     #IS_MYSQL = True
 
-    #print(f"是否检测自选标的：{ISMY}")
+    #print(f"是否检测自选标的：{ISMY_SELECT}")
     #print(f"是否从数据库获取PE信息：{IS_MYSQL}")
     
     ##选定标的
-    #if ISMY:
+    #if ISMY_SELECT:
     #    test_stocks = get_select_stocks(my_select)
     #else:
     #    test_stocks = get_select_stocks() 
@@ -767,7 +792,7 @@ if __name__ == "__main__":
     #N_YEARS = 3
     #result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
     #end_date = datetime.now().strftime("%Y%m%d")
-    #if ISMY:
+    #if ISMY_SELECT:
     #    filename = f'.\output\detect\detect_volume_reversal{end_date}_my.xlsx'
     #else:
     #    filename = f'.\output\detect\detect_volume_reversal{end_date}.xlsx'

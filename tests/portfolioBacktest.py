@@ -23,15 +23,13 @@ DYNAMIC_BUYMONEY = True #是否根据现有资金动态调整买入金额
 EQUAL_WEIGHT_BUY = True#是否等权买入，即每支股票只买入一次
 IS_BUY_K = True #是否加入指数PE分位系数
 PE_PERCENTILE_YEAR = 3#PE分位回溯时长（年）
-BUY_MAX_K = 2 #指数PE分位系数上限
-BUY_MIN_K = 0.3 #指数PE分位系数下限
+BUY_MAX_K = 1.7 #指数PE分位系数上限
+BUY_MIN_K = 0 #指数PE分位系数下限
 
 #卖出策略参数
-HOLD_DAYS_CONDITION = 1305 #卖出条件持仓时间 >= 1305天
-RETURN_CONDITION = 3 #卖出条件总收益率 >= 3.6倍
-DRAWDOWN = -1000#卖出回撤阈值15%，设为-1000该配置无效
-
-
+HOLD_DAYS_CONDITION = 752/250*365 #卖出条件持仓时间 >= 890天
+RETURN_CONDITION = 20 #卖出条件总收益率 >= 3.6倍
+DRAWDOWN = 15#卖出回撤阈值15%，设为-1000该配置无效
 
 
 class PositionTracker:
@@ -179,7 +177,7 @@ class PositionTracker:
         )
         
         # 3. 计算总收益和总收益率
-        self.re = (market_value - cost_value) + self.dividend_income
+        self.re = (market_value - cost_value) + self.dividend_income        
         self.total_return_rate = self.re / cost_value if cost_value > 0 else 0
         
         # 4. 检查卖出条件（使用完整收益率）
@@ -355,6 +353,7 @@ class PortfolioSimulator:
                 executed_orders_num = len(self.executed_orders)
                 waiting_orders_num = pending_orders_num - executed_orders_num
 
+                #根据hs300指数百分位动态调整买入系数buy_k
                 hs300PEttm_percentile = imiv.get_pe_percentile(self.df_hs300PEttm,current_date, PE_PERCENTILE_YEAR) if IS_BUY_K else 100*(BUY_MAX_K - 1)/(BUY_MAX_K - BUY_MIN_K)
                 buy_k = BUY_MAX_K - hs300PEttm_percentile * (BUY_MAX_K - BUY_MIN_K)/100
 
@@ -387,8 +386,17 @@ class PortfolioSimulator:
                     self.positions[code] = position
                 else:
                     self.positions[code].buy_date = current_date
+                    #重复买入时，计算成本和股数
+                    if self.positions[code].shares==0 and self.positions[code].re != 0:
+                        #如果已经清仓后再买入，新的成本价格需要考虑到以前的盈利
+                        self.positions[code].buy_price = (cost - self.positions[code].re)/shares
+                    else:
+                        #如果是还没卖出时加仓，根据两次买入加权计算成本(本次购买费用+以前购买费用)/现有总股数
+                        self.positions[code].buy_price = (cost + self.positions[code].shares*self.positions[code].buy_price)/(self.positions[code].shares + shares)
+                    #重复买入时，加权计算成本
                     self.positions[code].shares += shares
-                    self.positions[code].buy_price = actual_price
+                   
+                    
                     
                 
 
@@ -526,6 +534,7 @@ class PortfolioSimulator:
                     # 卖出操作：增加现金，移除持仓
                     self.current_cash += market_value
                     to_remove.append(code)
+                    hold_day = current_date_dt - pd.to_datetime(position.buy_date)
                     resean = f'{HOLD_DAYS_CONDITION}天止盈' if return_rate < RETURN_CONDITION else f'{RETURN_CONDITION}倍止盈'
                     
                     # 记录卖出信息
@@ -533,7 +542,8 @@ class PortfolioSimulator:
                         'code': code,
                         'amount': market_value,
                         'return_rate': return_rate,
-                        'reason': resean
+                        'reason': resean,
+                        'h_day':hold_day
                     })
                     log.info(
                         f"{current_date} 卖出 {code}，卖出原因{resean}: "
@@ -546,8 +556,11 @@ class PortfolioSimulator:
                 result[f'{code}_return'] = position_return                
                 
                 if self.isSaveStock:
-                    result[f'{code}_price'] = current_price
-                    result[f'{code}_dividend'] = dividend_income
+                    result[f'{code}_cp'] = current_price
+                    result[f'{code}_bp'] = position.buy_price
+                    result[f'{code}_n'] = position.shares
+                    result[f'{code}_div'] = dividend_income
+                    
                     
             except Exception as e:
                 log.error(f"{code}计算失败: {str(e)}")
@@ -661,12 +674,12 @@ def test_portfolio_simulator(ini_cash=5000000) -> pd.DataFrame:
     # 初始化组合
     simulator = PortfolioSimulator(
         initial_cash=ini_cash,
-        start_date="20180703",
-        isSaveStock = False #excel中是否要存储各股票每天的价格，用作手工校验
+        start_date="20240703",
+        isSaveStock = False #excel中是否要存储各股票每天的价格，用作手工校验False/True
     )
     
     # 从excel创建股票订单
-    buy_df = get_portfolio_stocks(base_path /f"..\input\buy_roe_dv_20180701.xlsx").dropna(axis=0, how='any')
+    buy_df = get_portfolio_stocks(base_path /f"..\input\detect_rev_BUY_20250717.xlsx").dropna(axis=0, how='any')
     # 订单数量，用于计算每次等权购买可用的资金
     order_amount = len(buy_df)
     buymoney = ini_cash /order_amount * 2

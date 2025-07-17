@@ -61,7 +61,7 @@ def selectStock():
     for file_num, chunk_idx in enumerate(chunk_indices):
         
         chunk_df = df_stock.iloc[chunk_idx]
-        df_result = pd.DataFrame(columns=['stock','name','ROI','现金','净利','负债','回款','pe_ttm','ratio'])
+        df_result = pd.DataFrame(columns=['stock','name','ROE','现金','净利','负债','回款','pe_ttm','ratio'])
         log.info(f"开始处理第{file_num+1}批数据，包含{len(chunk_df)}条记录")
         checkcount = 0
         
@@ -84,7 +84,7 @@ def selectStock():
                 df_result.loc[row_index] = {
                     'stock': r_code,
                     'name': r_name,
-                    'ROI': var1,
+                    'ROE': var1,
                     '现金': var2,
                     '净利': var3,
                     '负债': var4,
@@ -152,7 +152,7 @@ def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
                 log.error(f"无法获取{r_code}的财报数据，跳过")
                 return None, None, None, None, None
         except Exception as e:
-            log.error(f"checkRoeCashEBIT接口调用失败，次数{attempt+1} | 股票代码: {r_code}")
+            log.error(f"checkRoeCashEBIT接口调用失败，次数{attempt+1} | 股票代码: {r_code}，错误信息:{str(e)}")
             if attempt < MAX_CONSECUTIVE_ERRORS - 1:
                 time.sleep(RECONNECT_TIME)
             else:
@@ -177,14 +177,6 @@ def checkRoeCashEBIT(r_code="601398", startyear=STARTYEAR):
     for col in numeric_cols:
         if col in clean_df.columns:
             clean_df[col] = pd.to_numeric(clean_df[col].replace('--', np.nan), errors='coerce')
-    
-    
-
-    
-    # 指标5：应收账款周转天数(增强NaN处理)
-    receivable_values = clean_df['receivable_days'].tail(TESTYEAR).dropna()
-    var5 = '{:.2f}'.format(receivable_values.mean())
-
 
     # 指标1：平均ROE
     roe_values = clean_df['净资产收益率(%)'].head(PASTYEAR)

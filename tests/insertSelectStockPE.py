@@ -202,9 +202,12 @@ if __name__ == "__main__":
 
     #查询所有股票PE并入库
     
-    df = insertSelectStockPE("")#all
+    #df = insertSelectStockPE("")#all
 
     #导出Excel并自动调整列宽[4](@ref)
     #with pd.ExcelWriter(".\output\output.xlsx") as writer:
     #    df.to_excel(writer, sheet_name="全量数据")
     #selectStock()
+
+    df = ak.stock_hk_indicator_eniu('hk0700','市盈率')
+    print(df)

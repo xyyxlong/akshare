@@ -488,7 +488,6 @@ def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None
     
     参数：
         result      : detect_volume_reversal返回的结果列表
-        stock_list  : 原始股票列表（含代码列）
         filename    : 输出Excel文件名（如"volume_signals.xlsx"）
     """
 

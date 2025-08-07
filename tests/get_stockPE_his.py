@@ -196,12 +196,6 @@ def calculate_pe_time_percentile(stock_code: str, testyears: int) -> pd.DataFram
     
     return pd.DataFrame(result)
 
-# 使用示例
-if __name__ == "__main__":
-    # 获取贵州茅台近3年PE时间百分位
-    result_df = calculate_pe_time_percentile('600519', 3)
-    print(result_df.head())
-
 def get_stock_pe_percentile(code: str, statyears: int, getdate: str = None) -> dict:
     """
     获取股票PE百分位(兼容MySQL严格模式)
@@ -450,6 +444,9 @@ def test_pe_service():
 
 if __name__ == "__main__":
     #test_pe_calculator()
-    test_pe_service()
-    #df = calculate_pe_time_percentile('600900',5)
-    #print(df)
+    #test_pe_service()
+    df = calculate_pe_time_percentile('000333',3)
+    # df = _get_from_akshare('000333',1, '20250721')
+    print(df)
+    with pd.ExcelWriter(".\output\pettm_per.xlsx") as writer:
+       df.to_excel(writer, sheet_name="000333")

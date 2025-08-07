@@ -16,7 +16,7 @@ OUTTIME = 5  # 接口长时间无返回报错
 RECONNECT_TIME = 60 #断线重连休眠时间
 
 
-CHUNK_NUM = 30# 分块数量处理设置
+CHUNK_NUM = 5# 分块数量处理设置
 
 INSERT_SQL ="""
     INSERT IGNORE INTO `stock_pe_history` 
@@ -202,12 +202,12 @@ if __name__ == "__main__":
 
     #查询所有股票PE并入库
     
-    #df = insertSelectStockPE("")#all
+    df = insertSelectStockPE("")#all
 
     #导出Excel并自动调整列宽[4](@ref)
     #with pd.ExcelWriter(".\output\output.xlsx") as writer:
     #    df.to_excel(writer, sheet_name="全量数据")
     #selectStock()
 
-    df = ak.stock_hk_indicator_eniu('hk0700','市盈率')
-    print(df)
+    #df = ak.stock_hk_indicator_eniu('hk0700','市盈率')
+    #print(df)

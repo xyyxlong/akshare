@@ -127,7 +127,7 @@ VALUES
 
 SELECT COUNT(DISTINCT stock_pe_history.`stock_code`) AS Num_pe FROM stock_pe_history
 SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="600750" ORDER BY `trade_date` DESC
+SELECT * FROM `stock_pe_history`  WHERE stock_code="600900" ORDER BY `trade_date` DESC
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
 SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="301090"  AND  trade_date = "20240620" 
 SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_code IN 
@@ -203,11 +203,12 @@ CREATE TABLE stock_historical_data (
 ) COMMENT '股票历史行情数据表';
 
 SELECT * FROM stock_historical_data WHERE stock_code='603713' AND DATE< '2018-07-31' AND DATE> '2018-06-30'  ORDER BY DATE DESC
-SELECT * FROM stock_historical_data WHERE stock_code='603506' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data
 SELECT DISTINCT stock_code FROM stock_historical_data
-
+DELETE FROM stock_historical_data WHERE DATE = '2025-07-21';
+14753282
 
 -- 股票历史行情数据表(qfq)
 CREATE TABLE stock_historical_data_qfq (
@@ -229,9 +230,12 @@ CREATE TABLE stock_historical_data_qfq (
 ) COMMENT '股票历史行情数据表';
 
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='603506' AND DATE>'2010-06-01'
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq
+
+DELETE FROM stock_historical_data_qfq WHERE DATE = '2025-07-21';
 
 
 
@@ -338,7 +342,7 @@ CREATE TABLE stock_financial_reports (
     
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='上市公司财报数据表（含88字段完整版）';
 
-SELECT * FROM stock_financial_reports WHERE stock_code = '000001' ORDER BY report_date DESC
+SELECT * FROM stock_financial_reports WHERE stock_code = '600036' ORDER BY report_date DESC
 SELECT COUNT(*) FROM stock_financial_reports WHERE stock_code = '000001' ORDER BY report_date DESC
 SELECT COUNT(DISTINCT(stock_code)) FROM stock_financial_reports
 

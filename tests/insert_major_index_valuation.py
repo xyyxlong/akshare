@@ -1,8 +1,21 @@
+import os
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import akshare as ak
 from tqdm import tqdm
 import insert2Mysql as ins
+import log4ak
+
+base_path = Path(__file__).parent #系统绝对目录
+log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
+
+PE_STATIC = 'pe_static'
+PE_TTM = 'pe_ttm'
+PE_STATIC_MEDIAN = 'pe_static_median'
+PE_TTM_MEDIAN = 'pe_ttm_median'
+PE_EQUAL_WEIGHT_STATIC = 'pe_equal_weight_static'
+PE_EQUAL_WEIGHT_STATIC = 'pe_equal_weight_ttm'
 
 
 INSERT_SQL ="""
@@ -80,14 +93,16 @@ def get_index_pe_his(index_name: str) -> pd.DataFrame:
     df = ins.getdata_fetchall(HISTORY_SQL,(index_name,))
     return df
 
-def get_pe_percentile(df: pd.DataFrame, testdate: str, year_window: int) -> float:
+def get_pe_percentile(df: pd.DataFrame, testdate: str, pename: str,year_window: int) -> float:
     """
     计算指定日期指数PE在历史数据中的时间百分位
     
     参数:
         df (pd.DataFrame): get_index_pe_his()返回的历史PE数据
         testdate (str): 查询日期 (YYYY-MM-DD格式)
+        pename (str): PE列名（如'pe_ttm'）
         year_window (int): 回测时间窗口(年数)
+        
         
     返回:
         float: PE时间百分位值(0-100之间)
@@ -101,7 +116,7 @@ def get_pe_percentile(df: pd.DataFrame, testdate: str, year_window: int) -> floa
     
     # 转换日期格式并过滤有效数据
     df['日期'] = pd.to_datetime(df['日期'])
-    df = df.sort_values('日期').dropna(subset=['pe_ttm'])
+    df = df.sort_values('日期').dropna(subset=[pename])
     
     # 2. 确定时间窗口范围
     test_date = pd.to_datetime(testdate)
@@ -113,16 +128,16 @@ def get_pe_percentile(df: pd.DataFrame, testdate: str, year_window: int) -> floa
         return np.nan
     
     window_df = df.loc[window_mask].copy()
-    window_pe = window_df['pe_ttm'].values
+    window_pe = window_df[pename].values
     
     # 4. 获取测试日PE值
-    testday_pe = window_df.loc[window_df['日期'] == test_date, 'pe_ttm'].values
+    testday_pe = window_df.loc[window_df['日期'] == test_date, pename].values
     if len(testday_pe) == 0:
         # 如果测试日无数据，使用最近交易日的PE
         prev_days = window_df[window_df['日期'] < test_date]
         if prev_days.empty:
             return np.nan
-        testday_pe = prev_days.iloc[-1]['pe_ttm']
+        testday_pe = prev_days.iloc[-1][pename]
     
     # 5. 计算百分位[3,4](@ref)
     sorted_pe = np.sort(window_pe)
@@ -134,11 +149,108 @@ def get_pe_percentile(df: pd.DataFrame, testdate: str, year_window: int) -> floa
     
     return  percentile[0].astype(float) # 保留两位小数
 
+def get_pe_percentile_list(df: pd.DataFrame, pename: str,year_window: int) -> list:
+    """
+    计算指定PE列在历史数据中的时间百分位列表
+    参数:
+        df (pd.DataFrame): get_index_pe_his()返回的历史PE数据
+        pename (str): PE列名（如'pe_ttm'）
+        year_window (int): 回测时间窗口(年数)   
+    返回:
+        list: 每个交易日的PE时间百分位值列表
+    """
+    percentile_list = []
+    # 数据预处理
+    df = df.copy()
+    df['日期'] = pd.to_datetime(df['日期'])
+    df = df.sort_values('日期').dropna(subset=[pename])
+    dates = df['日期'].tolist()
+    pes = df[pename].tolist()
+
+    for i, test_date in enumerate(dates):
+        start_date = test_date - pd.DateOffset(years=year_window)
+        days = (test_date - start_date).days
+        # 取窗口内数据
+        window_mask = (df['日期'] >= start_date) & (df['日期'] <= test_date)
+        window_df = df.loc[window_mask]
+        window_pe = window_df[pename].values
+
+        # 如果窗口长度小于year_window对应的天数，赋值为nan
+        winlen= len(window_pe)
+        if winlen < 240 * year_window:  # 250为一年交易日数
+            percentile_list.append(np.nan)
+            continue
+
+        testday_pe = pes[i]
+        sorted_pe = np.sort(window_pe)
+        count_below = np.searchsorted(sorted_pe, testday_pe, side='right')
+        percentile = (count_below / len(sorted_pe)) * 100
+        percentile_list.append(round(percentile, 2))
+
+    return percentile_list
+
+def get_pe_percentile_list(df: pd.DataFrame, penamelist: list[str], year_window: int) -> pd.DataFrame:
+    """
+    计算指定PE列在历史数据中的时间百分位列表
+    参数:
+        df (pd.DataFrame): get_index_pe_his()返回的历史PE数据
+        penamelist (list[str]): PE列名列表（如['pe_ttm', 'pe_static']）
+        year_window (int): 回测时间窗口(年数)   
+    返回:
+        pd.DataFrame: 包含每个PE列的时间百分位列表
+    """
+    df = df.copy()
+    df['日期'] = pd.to_datetime(df['日期'])
+    df = df.sort_values('日期')
+    result = pd.DataFrame({'日期': df['日期']})
+
+    for pename in penamelist:
+        if pename not in df.columns:
+            result[pename + '_percentile'] = np.nan
+            continue
+        pes = df[pename].tolist()
+        percentile_list = []
+        for i, test_date in enumerate(df['日期']):
+            start_date = test_date - pd.DateOffset(years=year_window)
+            window_mask = (df['日期'] >= start_date) & (df['日期'] <= test_date)
+            window_df = df.loc[window_mask]
+            window_pe = window_df[pename].dropna().values
+
+            # 如果窗口长度小于year_window对应的交易日数，赋值为nan
+            if len(window_pe) < 240 * year_window:
+                percentile_list.append(np.nan)
+                continue
+
+            testday_pe = pes[i]
+            sorted_pe = np.sort(window_pe)
+            count_below = np.searchsorted(sorted_pe, testday_pe, side='right')
+            percentile = (count_below / len(sorted_pe)) * 100
+            percentile_list.append(round(percentile, 2))
+        result[pename + '_percentile'] = percentile_list
+
+    return result
+
 if __name__ == "__main__":
     # 使用示例
-    df = get_major_index_valuation()
-    #df = get_index_pe_his('沪深300')
-    #percent = get_pe_percentile(df, "20250704",3)
-    #df = df.iloc[0:2]
-
-    #print(percent)
+    # df = get_major_index_valuation()
+    df = get_index_pe_his('沪深300')
+    year_window = 3  # 回测时间窗口为5年
+    pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
+    
+    # percent = '{:.2f}'.format(get_pe_percentile(df, "20240806",pename, year_window))
+    # print(df.iloc[-1])
+    # print(f"{pename} {year_window} year percent: {percent}%")
+    
+    # percentlist= get_pe_percentile_list(df, pename, year_window)
+    # df['percentile'] = percentlist
+    # filename=base_path / f'..\output/index_pe_{pename}_percentile.xlsx'
+    # df.to_excel(filename, index=False)
+    # print(df[['日期', pename, 'percentile']].tail(10))
+    
+    penamelist = ['pe_static', 'pe_ttm', 'pe_static_median', 'pe_ttm_median', 'pe_equal_weight_static', 'pe_equal_weight_ttm']
+    percent_df = get_pe_percentile_list(df, penamelist, year_window)
+    # 合并原始df和百分位df
+    merged_df = pd.concat([df.reset_index(drop=True), percent_df.drop(columns=['日期']).reset_index(drop=True)], axis=1)
+    merged_df.to_excel(base_path / f'..\output/index_pe_with_percentile_{year_window}year.xlsx', index=False)
+    print(merged_df.tail(10))
+    

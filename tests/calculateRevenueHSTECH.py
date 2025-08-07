@@ -8,10 +8,46 @@ import time
 CACHE_EXPIRY = 3600  # 成分股缓存有效期1小时
 RETRY_TIMES = 1  # 接口重试次数
 
+HSTECH_STOCKS=[#恒生指数公司官网（https://www.hsi.com.hk）：查看“恒生科技指数”最新季检公告，通常在3月、6月、9月、12月发布。
+    '01810',
+    '09999',
+    '00700',
+    '09988',
+    '01211',
+    '03690',
+    '09618',
+    '00981',
+    '01024',
+    '02015',
+    '09961',
+    '09868',
+    '09888',
+    '00992',
+    '06690',
+    '02382',
+    '09626',
+    '06618',
+    '00268',
+    '00300',
+    '00020',
+    '03888',
+    '00241',
+    '00780',
+    '00285',
+    '01347',
+    '00522',
+    '09866',
+    '09660',
+    '01698',
+    ]
+
 # ================== 成分股获取优化 ==================
-def get_hstech_components(use_cache=True):
+def get_hstech_components(use_cache=True)-> pd.DataFrame:
     """
     获取恒生科技指数成分股（动态接口+静态备份）
+    :param use_cache: 是否使用缓存，默认为True
+    :return: 成分股DataFrame
+    :rtype: pandas.DataFrame  
     """
     # 缓存检查
     if use_cache and hasattr(get_hstech_components, 'cache'):
@@ -37,17 +73,16 @@ def get_hstech_components(use_cache=True):
     except Exception as e:
         print(f"接口获取失败: {e}, 启用静态数据")
         # 2025年5月最新成分股（含腾讯音乐、地平线机器人）
-        hstech_stocks = ['00700', '03690', '01810', '09988', '09618',
-            '01024', '02015', '09868', '02382', '09999',
-            '09626', '09633', '09888', '06690', '06060',
-            '02520', '09911', '09906', '06186', '01698',
-            '09660', '00241', '00268']
-        return pd.DataFrame({'代码': hstech_stocks, '名称': ['' for _ in hstech_stocks]})
+        return pd.DataFrame({'代码': HSTECH_STOCKS})
 
 # ================== 财务数据获取优化 ==================
-def fetch_financial_data(code, report_year):
+def fetch_financial_data(code, report_year)-> dict:
     """
     使用港股专用接口获取财务数据
+    :param code: 港股代码
+    :param report_year: 财报年份
+    :return: 财务数据字典
+    :rtype: dict    
     """
     for _ in range(RETRY_TIMES):
         try:
@@ -89,9 +124,12 @@ def fetch_financial_data(code, report_year):
     
     return {'简称': None,'营业收入': None, '净利润': None}
 
-def get_hk_financials(report_year=2024):
+def get_hk_financials(report_year=2024) -> pd.DataFrame:
     """
     获取全成分股财务数据（含进度条和缓存）
+    :param report_year: 财报年份，默认为2024
+    :return: 成分股财务数据DataFrame 
+    :rtype: pandas.DataFrame
     """
     # 报告期验证
     if not (2019 < report_year < datetime.now().year):
@@ -107,6 +145,7 @@ def get_hk_financials(report_year=2024):
         financials.append({
             '代码': code,
             '简称' : data['简称'],
+            '报告期': f"{report_year}-12-31",
             '营收(亿元)': data['营业收入'] / 1e8 if data['营业收入'] else None,  # 转换为亿元
             '净利润(亿元)': data['净利润'] / 1e8 if data['净利润'] else None
         })
@@ -121,9 +160,12 @@ def get_hk_financials(report_year=2024):
     return result_df.dropna(subset=['简称','营收(亿元)', '净利润(亿元)'])
 
 # ================== 分析功能增强 ==================
-def analyze_hstech(report_years=[2023, 2024]):
+def analyze_hstech(report_years=[2023, 2024])-> pd.DataFrame:
     """
     多维度对比分析
+    :param report_years: 报告年份列表，默认为[2023, 2024]
+    :return: 分析结果DataFrame 
+    :rtype: pandas.DataFrame
     """
     analysis = []
     for year in report_years:

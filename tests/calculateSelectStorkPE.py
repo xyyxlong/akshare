@@ -2,6 +2,9 @@
 import numpy as np
 from sqlalchemy import create_engine
 import xlsxwriter
+
+# 并行处理数据块（网页11）
+from multiprocessing import Pool
 from datetime import datetime
 
 
@@ -84,8 +87,6 @@ def calculate_percentiles(chunk, selectdate=None):
     
     return pd.DataFrame(result)
 
-# 并行处理数据块（网页11）
-from multiprocessing import Pool
 
 def parallel_processing(selectdate=None):
     with Pool(4) as pool:  # 4个进程

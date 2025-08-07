@@ -4,30 +4,12 @@ import pandas as pd
 import xlsxwriter
 import datetime
 import log4ak
+import getAllStock as gas
+import commTools as ct
 
-def testlog() -> None:
-    log = log4ak.LogManager(log_level=log4ak.ERROR)
+df = gas.get_select_stocks()
+df_list = ct.df_dflist(df,10)
 
-df = pd.DataFrame(data=[[0.2,0.1],[np.nan,None]],columns=['code','name'])
-
-#for col in df.columns:
-#    df[col] = df[col].replace({np.nan: None}).astype(float, errors='ignore')
-
-print(any(df['code'].isnull()))
-print(all(df['name'].isnull()))
-
-for row in df.itertuples(index=False):
-        # 显式处理每个元素，防止隐式转换 [7](@ref)
-        processed_row = tuple(
-            None if pd.isna(item) else item  # 二次检查确保无 NaN 残留
-            for item in row
-        )
-
-batch_data = df.to_records(index=False).tolist()
-
-
-print(df)
-print(batch_data)
 
 
 

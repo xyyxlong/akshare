@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 
 
-def get_financial_data(report_time="20231231"):
+def get_financial_data(report_time="20231231")-> pd.DataFrame:
     """获取提取财报快讯计算营收和利润（使用stock_yjbb_em接口）"""
     # 1. 报告期格式处理（网页6要求）
     if len(report_time) != 8 or report_time[4:] not in ('0331', '0630', '0930', '1231'):
@@ -50,7 +50,7 @@ def get_financial_data(report_time="20231231"):
     result_df[['代码', '简称', '营收(亿元)', '净利润(亿元)', '报告期']].to_excel(output_path, index=False)
     return result_df
 
-def standardize_stock_code(code):
+def standardize_stock_code(code) -> str:
     """代码标准化函数（兼容更多格式）"""
     code = str(code).strip().upper()
     if code.startswith(('SH', 'SZ')):  # 已有前缀则直接返回
@@ -62,7 +62,7 @@ def standardize_stock_code(code):
     else:
         return code
 
-def get_hs300_stocks():
+def get_hs300_stocks() -> pd.DataFrame:
     """获取300成分股获取（兼容接口变更）"""
     try:
         # 新版接口可能返回不同字段名
@@ -79,7 +79,7 @@ def get_hs300_stocks():
 
 if __name__ == "__main__":
     """对比不同报告期数据"""
-    report_times=["20231231", "20241231"]
+    report_times=["20240331", "20250331"]
     results = []
     for rt in report_times:
         df = get_financial_data(rt)

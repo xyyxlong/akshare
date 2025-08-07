@@ -1,9 +1,10 @@
 ﻿import akshare as ak
+import numpy as np
 from datetime import datetime, timedelta
 import pandas as pd
+from typing import List
 
 # 获取全量历史交易日数据（截止到2025年）
-
 def get_last_trade_dates() -> str:
 
     last_trade_dates = ""
@@ -61,7 +62,67 @@ def merge_on_date_str_index(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFram
         print(f"合并错误: {e}")
         return pd.DataFrame()
 
+def df_dflist(df, n) -> list[pd.DataFrame]:
+    """
+    将DataFrame分割后，将各块数据放入列表，列表元素为DataFrame。
+    """
+    col=df.columns
+    Z_array=df.values
+    ls_np=np.array_split(Z_array,n,axis=0)   
+    ls_df=[pd.DataFrame(i,columns=col) for i in ls_np]
+    return ls_df  
+
+def safe_array_split(df_list: List[pd.DataFrame], n_chunks: int) -> List[List[pd.DataFrame]]:
+    """
+    安全分割DataFrame列表中的每个DataFrame
+    
+    参数:
+        df_list: 包含多个DataFrame的列表
+        n_chunks: 每个DataFrame要分割的块数
+    
+    返回:
+        嵌套列表，外层是原始列表顺序，内层是分割后的DataFrame块
+    """
+    result = []
+    for df in df_list:
+        # 检查类型：如果是元组则转换为DataFrame
+        if isinstance(df, tuple):
+            try:
+                df = pd.DataFrame(df)  # 尝试将元组转为DataFrame
+            except Exception as e:
+                print(f"转换元组失败: {e}")
+                result.append([])  # 跳过无效数据
+                continue
+        # 确保处理的是DataFrame
+        if not isinstance(df, pd.DataFrame):
+            print(f"警告：跳过非DataFrame元素（类型：{type(df)}）")
+            result.append([])
+            continue
+                
+            # 计算实际分块数（不超过数据长度）
+            actual_chunks = min(n_chunks, len(df))
+            # 计算基础分块大小（至少为1）
+            base_size = max(1, len(df) // actual_chunks)
+            # 计算余数（需要额外分配的行数）
+            remainder = len(df) % actual_chunks
+            
+            # 智能分块算法
+            start = 0
+            df_chunks = []
+            for i in range(actual_chunks):
+                # 计算当前分块大小（前remainder个分块多1行）
+                current_size = base_size + (1 if i < remainder else 0)
+                # 获取分块
+                chunk = df.iloc[start:start + current_size].copy()
+                # 添加到结果列表
+                df_chunks.append(chunk)
+                # 更新起始位置
+                start += current_size
+            
+            result.append(df_chunks)
+    return result
 
 if __name__ == "__main__":
     print(f"上一个交易日：{get_last_trade_dates()}")  # 输出示例：20250611
+    df = []
 

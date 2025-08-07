@@ -1,10 +1,10 @@
 ﻿import os
 from pathlib import Path
+from typing import List, Tuple, Union
 import time
 import numpy as np
 import akshare as ak
 import pandas as pd
-import xlsxwriter
 from tqdm import tqdm
 from getAllStock import get_all_stocks, get_select_stocks
 import get_industry_historyPE as gi
@@ -17,14 +17,14 @@ import log4ak
 
 base_path = Path(__file__).parent #系统绝对目录
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
+MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
+OUTTIME = 5  # 接口长时间无返回报错
+ALL_PE_DOC_NUM = 1 #当输出ALLPEexcel文档时，分割为几个文档输出
 
 
 KEEPDAY = 3
 DODUP = 0.12 #连续5个交易日放量平均增长率15%
-GROUNDVOLUME = 0.05 #地价地量阈值检测时间内5%分位
-
-MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
-OUTTIME = 5  # 接口长时间无返回报错
+GROUNDVOLUME_PERCENTILE = 5 #地价地量阈值检测时间内5%分位
 N_YEARS = 3  #回测N_YEARS年百分位
 START_DATE = "20160701" #回测开始日期
 
@@ -77,19 +77,19 @@ def detect_price_volume_reversal(stock_list: pd.DataFrame,
             hist_data = hist_data.sort_index(ascending=True)
             
             # 计算n年历史分位（参考网页5/7的地量判断逻辑）
-            rolling_window = n_years * 250  # 假设每年250个交易日
+            rolling_window = n_years * 243  # 假设每年243个交易日
 
             #收盘价历史分位
             hist_data['price'] = hist_data['收盘'].rolling(rolling_window).apply(
                 lambda x: x.rank(pct=True).iloc[-1], raw=False)
             # 收盘价检测地量条件
-            hist_data['p_mask'] = hist_data['price'] < GROUNDVOLUME  # 收盘价处于近n年最低5%分位
+            hist_data['p_mask'] = hist_data['price'] < GROUNDVOLUME_PERCENTILE/100  # 收盘价处于近n年最低5%分位
             
             #成交额历史分位
             hist_data['volume'] = hist_data['成交额'].rolling(rolling_window).apply(
                 lambda x: x.rank(pct=True).iloc[-1], raw=False)            
             # 成交额检测地量条件
-            hist_data['v_mask'] = hist_data['volume'] < GROUNDVOLUME  # 成交额处于近n年最低5%分位
+            hist_data['v_mask'] = hist_data['volume'] < GROUNDVOLUME_PERCENTILE/100  # 成交额处于近n年最低5%分位
             
             # 检测连续量能递增（网页2/9的递增逻辑）
             hist_data['v_growth'] = hist_data['成交额'].pct_change() + 1
@@ -231,7 +231,7 @@ def test_buy_signals(code:str, name:str,hist_data: pd.DataFrame) -> list:
             #判断指定日期股息率>
             dv_ratio =  onedayPE['dv_ratio'].iloc[0] if onedayPE is not None else -1
 
-            hs300PEttm_percentile = imiv.get_pe_percentile(DF_HS300PETTM,date.strftime('%Y%m%d'), PE300_PERCENTILE_YEAR) if IS_BUY_K else 0
+            hs300PEttm_percentile = imiv.get_pe_percentile(DF_HS300PETTM,date.strftime('%Y%m%d'), imiv.PE_TTM,PE300_PERCENTILE_YEAR) if IS_BUY_K else 0
         
             # 记录有效信号
             signals_list.append({
@@ -408,8 +408,8 @@ def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
                 all_stock_pe = gs.get_stock_pe_his(code)
             
                 # 2. 合并当前日期范围内的PE数据
-                #if all_industry_pe is not None:
-                #    df = pd.merge(df, all_industry_pe, how='left', on='日期', suffixes=('', '_industry'))
+                if all_industry_pe is not None:
+                    df = pd.merge(df, all_industry_pe, how='left', on='日期', suffixes=('', '_industry'))
                 if all_stock_pe is not None:
                     df = pd.merge(df, all_stock_pe, how='left', on='日期', suffixes=('', '_stock'))
 
@@ -481,8 +481,47 @@ def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
     log.info(f"今天检测通过数量：{passNum}")
     return resultlist
 
+def save_to_excel_n(result: list, filename: str, nlist: int = 1) -> None:
+    """
+    优化版：将检测结果按股票代码分Sheet保存到Excel，支持分割为多个文件并均匀分配记录
+    
+    参数：
+        result   : detect_volume_reversal返回的结果列表
+        filename : 输出Excel文件名（如"volume_signals.xlsx"）
+        nlist    : 将结果分割为多少份输出（默认1份）
+    """
+    if not result:
+        log.info("结果列表为空，无需保存")
+        return
+    
+    total_records = len(result)
+    actual_n = min(nlist, total_records)
+    
+    # 计算基础块大小和余数（需多存一条记录的文件数）
+    base_size = total_records // actual_n
+    remainder = total_records % actual_n  # 余数决定前几个文件需多存一条
+    
+    # 动态分块：前remainder个文件存base_size+1条，其余存base_size条
+    chunks = []
+    start_index = 0
+    for i in range(actual_n):
+        # 计算当前块大小（前remainder个文件多1条）
+        current_size = base_size + 1 if i < remainder else base_size
+        end_index = start_index + current_size
+        chunks.append(result[start_index:end_index])
+        start_index = end_index
+    
+    # 写入Excel
+    for i, chunk in enumerate(chunks):
+        file_suffix = f"_{i+1}" if actual_n > 1 else ""
+        output_file = str(filename).replace(".xlsx", f"{file_suffix}.xlsx")
+        
+        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+            for sheet_name, df in chunk:
+                df.to_excel(writer, sheet_name=sheet_name, index=True)
+        log.info(f"已保存: {output_file} (包含 {len(chunk)} 个Sheet)")
 
-def save_to_excel(result: list, stock_list: pd.DataFrame, filename: str) -> None:
+def save_to_excel(result: list, filename: str) -> None:
     """
     将检测结果按股票代码分Sheet保存到Excel
     
@@ -661,15 +700,17 @@ def detect_with_allPE(path: str):
     result = detect_price_volume_reversal(test_stocks, start_date = START_DATE, n_years = N_YEARS)
     write_df = getPE_after_detect(result,test_stocks)
 
-    end_date = datetime.now().strftime("%Y%m%d")
-    if ISMY_SELECT:
-        filename =base_path / f'..\output\detect\detect_rev_allPE_{end_date}_my.xlsx'
-    else:
-        filename =base_path / f'..\output\detect\detect_rev_allPE_{end_date}.xlsx'
-
     log.info(f"检查成功检测数：{len(write_df)}")
 
-    save_to_excel(write_df,test_stocks,filename)
+    end_date = datetime.now().strftime("%Y%m%d")
+
+
+    if ISMY_SELECT:
+        filename =base_path / f'..\output\detect\detect_allPE_{end_date}_my.xlsx'
+    else:
+        filename =base_path / f'..\output\detect\detect_allPE_{end_date}.xlsx'
+
+    save_to_excel_n(write_df,filename,ALL_PE_DOC_NUM)
 
 
 def detect_with_lastPE(path: str):
@@ -734,7 +775,7 @@ def detect_with_buy(path: str):
 
     log.info(f"检查成功检测数：{len(result)}")
 
-    save_to_excel(result,test_stocks,filename)
+    save_to_excel(result,filename)
 
 # 每天（有空）执行检测
 if __name__ == "__main__":
@@ -751,18 +792,22 @@ if __name__ == "__main__":
     #是否对所有检测标的输出结果True/False
     ISALL = True
 
-    #detect_with_lastPE(my_select)
-
-    #是否检测买点
-    IS_BUY = True
     PE_ROLLING_TIME = 3 #滚动PE百分位时间配置，默认5年
-    PE_PERCENTILE = 5
-    BUY_WITH_PE_PERCENTLE = False#通过PE和成交量判断买点
-    detect_with_buy(my_select)
+    PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
 
-    #PE_ROLLING_TIME = 3 #滚动PE百分位时间配置，默认5年
-    #PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
-    #detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
+    #检测自选股买点，只展现有买点可能性的标的
+    # detect_with_lastPE(my_select)
+
+    
+    #检测自选股买点，呈现所有自选股的数据
+    ALL_PE_DOC_NUM = 1 #当输出ALLPEexcel文档时，分割为几个文档输出
+    detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
+
+    #直接生成买点订单（回测使用）
+    #IS_BUY = True
+    #BUY_WITH_PE_PERCENTLE = False#通过PE和成交量判断买点
+    #detect_with_buy(my_select)
+
 
     
 

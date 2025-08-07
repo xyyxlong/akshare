@@ -354,7 +354,7 @@ class PortfolioSimulator:
                 waiting_orders_num = pending_orders_num - executed_orders_num
 
                 #根据hs300指数百分位动态调整买入系数buy_k
-                hs300PEttm_percentile = imiv.get_pe_percentile(self.df_hs300PEttm,current_date, PE_PERCENTILE_YEAR) if IS_BUY_K else 100*(BUY_MAX_K - 1)/(BUY_MAX_K - BUY_MIN_K)
+                hs300PEttm_percentile = imiv.get_pe_percentile(self.df_hs300PEttm,current_date,imiv.PE_TTM,PE_PERCENTILE_YEAR) if IS_BUY_K else 100*(BUY_MAX_K - 1)/(BUY_MAX_K - BUY_MIN_K)
                 buy_k = BUY_MAX_K - hs300PEttm_percentile * (BUY_MAX_K - BUY_MIN_K)/100
 
                 #是否根据现金动态调整买入金额

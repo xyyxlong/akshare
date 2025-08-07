@@ -26,7 +26,7 @@ ISMY = False #是否选取自选配置False/True
 IS_MYSQL = True  #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
 
 ##选股参数设置：
-STARTDATE = "20220701"  #计算的起始日期
+STARTDATE = "20230701"  #计算的起始日期
 STARTYEAR = STARTDATE[:4]  #计算的起始年份
 TESTYEAR = 2 #计算从startyear开始5年的净资产收益率，经营性现金流，负债率，应收账款周期
 

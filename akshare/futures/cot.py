@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 """
-Date: 2025/1/10 18:30
+Date: 2025/7/21 15:00
 Desc: 期货-中国-交易所-会员持仓数据接口
 大连商品交易所、上海期货交易所、郑州商品交易所、中国金融期货交易所、广州期货交易所
 采集前 20 会员持仓数据;
@@ -306,7 +306,7 @@ def get_shfe_rank_table(
     if date.strftime("%Y%m%d") not in calendar:
         warnings.warn("%s非交易日" % date.strftime("%Y%m%d"))
         return {}
-    url = cons.SHFE_VOL_RANK_URL % (date.strftime("%Y%m%d"))
+    url = cons.SHFE_VOL_RANK_URL_20250701 % (date.strftime("%Y%m%d"))
     r = requests_link(url, encoding="utf-8", headers=cons.shfe_headers)
     try:
         context = json.loads(r.text)
@@ -509,7 +509,7 @@ def _get_dce_contract_list(date, var):
     :param var: 合约品种
     :return: list 公布了持仓排名的合约列表
     """
-    url = "http://www.dce.com.cn/publicweb/quotesdata/memberDealPosiQuotes.html"
+    url = "http://portal.dce.com.cn/publicweb/quotesdata/memberDealPosiQuotes.html"
     headers = {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;"
         "q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -518,7 +518,7 @@ def _get_dce_contract_list(date, var):
         "Cache-Control": "no-cache",
         "Connection": "close",
         "Host": "www.dce.com.cn",
-        "Origin": "http://www.dce.com.cn",
+        "Origin": "http://portal.dce.com.cn",
         "Pragma": "no-cache",
         "Upgrade-Insecure-Requests": "1",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -642,7 +642,7 @@ def get_dce_rank_table(date: str = "20230706", vars_list=cons.contract_symbols) 
                 ].astype(float)
                 big_dict[symbol] = temp_df
             except:  # noqa: E722
-                temp_url = "http://www.dce.com.cn/publicweb/quotesdata/memberDealPosiQuotes.html"
+                temp_url = "http://portal.dce.com.cn/publicweb/quotesdata/memberDealPosiQuotes.html"
                 payload = {
                     "memberDealPosiQuotes.variety": var.lower(),
                     "memberDealPosiQuotes.trade_type": "0",
@@ -816,7 +816,7 @@ def futures_dce_position_rank(
     if date.strftime("%Y%m%d") not in calendar:
         warnings.warn("%s非交易日" % date.strftime("%Y%m%d"))
         return {}
-    url = "http://www.dce.com.cn/publicweb/quotesdata/exportMemberDealPosiQuotesBatchData.html"
+    url = "http://portal.dce.com.cn/publicweb/quotesdata/exportMemberDealPosiQuotesBatchData.html"
     headers = {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;"
         "q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -827,9 +827,9 @@ def futures_dce_position_rank(
         "Content-Length": "160",
         "Content-Type": "application/x-www-form-urlencoded",
         "Host": "www.dce.com.cn",
-        "Origin": "http://www.dce.com.cn",
+        "Origin": "http://portal.dce.com.cn",
         "Pragma": "no-cache",
-        "Referer": "http://www.dce.com.cn/publicweb/quotesdata/memberDealPosiQuotes.html",
+        "Referer": "http://portal.dce.com.cn/publicweb/quotesdata/memberDealPosiQuotes.html",
         "Upgrade-Insecure-Requests": "1",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/81.0.4044.138 Safari/537.36",
@@ -1340,7 +1340,7 @@ if __name__ == "__main__":
     print(get_czce_rank_table_first_df)
 
     # 中国金融期货交易所
-    get_cffex_rank_table_df = get_cffex_rank_table(date="20100810")
+    get_cffex_rank_table_df = get_cffex_rank_table(date="20250721")
     print(get_cffex_rank_table_df)
 
     # 上海期货交易所
@@ -1373,12 +1373,12 @@ if __name__ == "__main__":
     print(futures_dce_position_rank_other_df)
 
     # 广州期货交易所
-    futures_gfex_position_rank_df = futures_gfex_position_rank(date="20240729")
+    futures_gfex_position_rank_df = futures_gfex_position_rank(date="20250718")
     print(futures_gfex_position_rank_df)
 
     # 总接口
     get_rank_sum_daily_df = get_rank_sum_daily(
-        start_day="20231010",
-        end_day="20231013",
+        start_day="20250718",
+        end_day="20250718",
     )
     print(get_rank_sum_daily_df)

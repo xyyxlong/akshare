@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 """
-Date: 2024/11/28 22:00
+Date: 2025/7/21 15:00
 Desc: 期货品种映射表
 """
 
@@ -61,6 +61,8 @@ def chinese_to_english(chinese_var: str):
         "沥青厂库",
         "沥青(厂库)",
         "热轧卷板",
+        "热轧卷板厂库",
+        "热轧卷板仓库",
         "热轧板卷",
         "燃料油",
         "白银",
@@ -140,6 +142,7 @@ def chinese_to_english(chinese_var: str):
         "20号胶20",
         "红枣",
         "不锈钢仓库",
+        "不锈钢厂库",
         "纯碱",
         "液化石油气",
         "低硫燃料油",
@@ -166,6 +169,9 @@ def chinese_to_english(chinese_var: str):
         "丁二烯橡胶厂库",
         "PX",
         "原木",
+        "瓶片",
+        "纯苯",
+        "多晶硅",
     ]
     english_list = [
         "RU",
@@ -176,6 +182,8 @@ def chinese_to_english(chinese_var: str):
         "BU",
         "BU2",
         "BU2",
+        "HC",
+        "HC",
         "HC",
         "HC",
         "FU",
@@ -256,6 +264,7 @@ def chinese_to_english(chinese_var: str):
         "NR",
         "CJ",
         "SS",
+        "SS",
         "SA",
         "PG",
         "LU",
@@ -282,6 +291,9 @@ def chinese_to_english(chinese_var: str):
         "BR",
         "PX",
         "LG",
+        "PR",
+        "BZ",
+        "PS",
     ]
     pos = chinese_list.index(chinese_var)
     return english_list[pos]

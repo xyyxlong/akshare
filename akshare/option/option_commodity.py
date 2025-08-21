@@ -26,7 +26,6 @@ from akshare.option.cons import (
     get_calendar,
     convert_date,
     DCE_DAILY_OPTION_URL,
-    SHFE_OPTION_URL,
     CZCE_DAILY_OPTION_URL_3,
     SHFE_HEADERS,
 )
@@ -157,6 +156,11 @@ def option_dce_daily(
             table_df[table_df["商品名称"] == "原木"],
             another_df[another_df.iloc[:, 0].str.contains("lg")],
         )
+    elif symbol == "纯苯期权":
+        result_one_df, result_two_df = (
+            table_df[table_df["商品名称"] == "纯苯"],
+            another_df[another_df.iloc[:, 0].str.contains("bz")],
+        )
     result_one_df.reset_index(inplace=True, drop=True)
     result_two_df.reset_index(inplace=True, drop=True)
     result_two_df.columns.name = None
@@ -210,7 +214,7 @@ def option_czce_daily(
     :type trade_date: str
     :param symbol: choice of {"白糖期权", "棉花期权", "甲醇期权", "PTA期权", "动力煤期权", "菜籽粕期权", "菜籽油期权",
     "花生期权", "对二甲苯期权", "烧碱期权", "纯碱期权", "短纤期权", "锰硅期权", "硅铁期权", "尿素期权", "苹果期权", "红枣期权",
-    "玻璃期权", "瓶片期权"}
+    "玻璃期权", "瓶片期权", "丙烯期货"}
     :type symbol: str
     :return: 日频行情数据
     :rtype: pandas.DataFrame
@@ -360,6 +364,12 @@ def option_czce_daily(
                 return new_df
             elif symbol == "瓶片期权":
                 temp_df = table_df[table_df.iloc[:, 0].str.contains("PR")]
+                temp_df.reset_index(inplace=True, drop=True)
+                temp_df = temp_df.iloc[:-1, :].copy()
+                new_df = __option_czce_daily_convert_numeric_columns(temp_df)
+                return new_df
+            elif symbol == "丙烯期货":
+                temp_df = table_df[table_df.iloc[:, 0].str.contains("PL")]
                 temp_df.reset_index(inplace=True, drop=True)
                 temp_df = temp_df.iloc[:-1, :].copy()
                 new_df = __option_czce_daily_convert_numeric_columns(temp_df)
@@ -626,11 +636,11 @@ def option_gfex_vol_daily(symbol: str = "碳酸锂", trade_date: str = "20230724
 
 
 if __name__ == "__main__":
-    option_czce_daily_df = option_czce_daily(symbol="白糖期权", trade_date="20170419")
+    option_czce_daily_df = option_czce_daily(symbol="丙烯期货", trade_date="20250812")
     print(option_czce_daily_df)
 
     option_dce_daily_one, option_dce_daily_two = option_dce_daily(
-        symbol="生猪期权", trade_date="20250327"
+        symbol="纯苯期权", trade_date="20250814"
     )
     print(option_dce_daily_one)
     print(option_dce_daily_two)
@@ -653,7 +663,7 @@ if __name__ == "__main__":
     print(option_shfe_daily_one)
     print(option_shfe_daily_two)
 
-    option_gfex_daily_df = option_gfex_daily(symbol="工业硅", trade_date="20240102")
+    option_gfex_daily_df = option_gfex_daily(symbol="工业硅", trade_date="20250801")
     print(option_gfex_daily_df)
 
     option_gfex_vol_daily_df = option_gfex_vol_daily(

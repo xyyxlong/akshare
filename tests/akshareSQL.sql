@@ -203,7 +203,7 @@ CREATE TABLE stock_historical_data (
 ) COMMENT '股票历史行情数据表';
 
 SELECT * FROM stock_historical_data WHERE stock_code='603713' AND DATE< '2018-07-31' AND DATE> '2018-06-30'  ORDER BY DATE DESC
-SELECT * FROM stock_historical_data WHERE stock_code='600900' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data WHERE stock_code='000333' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data
 SELECT DISTINCT stock_code FROM stock_historical_data
@@ -230,7 +230,7 @@ CREATE TABLE stock_historical_data_qfq (
 ) COMMENT '股票历史行情数据表';
 
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='603506' AND DATE>'2010-06-01'
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='000333' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq

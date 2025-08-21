@@ -11,7 +11,7 @@ import insert2Mysql as ins
 
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
 
-MAX_CONSECUTIVE_ERRORS = 3  # 最大允许连续错误次数
+MAX_CONSECUTIVE_ERRORS = 1  # 最大允许连续错误次数
 OUTTIME = 5  # 接口长时间无返回报错
 RECONNECT_TIME = 60 #断线重连休眠时间
 

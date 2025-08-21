@@ -784,7 +784,7 @@ if __name__ == "__main__":
     #回测N_YEARS年百分位
     N_YEARS = 3 
     #回测开始日期
-    START_DATE = "20210701" 
+    START_DATE = "20200701" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False
@@ -808,41 +808,6 @@ if __name__ == "__main__":
     #BUY_WITH_PE_PERCENTLE = False#通过PE和成交量判断买点
     #detect_with_buy(my_select)
 
-
-    
-
-
-
-
-
-
-    #my_select=r"..\input\selectlist_my.xlsx"
-    ##是否检测自选True/False
-    #ISMY_SELECT = True
-    ##PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
-    #IS_MYSQL = True
-
-    #print(f"是否检测自选标的：{ISMY_SELECT}")
-    #print(f"是否从数据库获取PE信息：{IS_MYSQL}")
-    
-    ##选定标的
-    #if ISMY_SELECT:
-    #    test_stocks = get_select_stocks(my_select)
-    #else:
-    #    test_stocks = get_select_stocks() 
-
-    ## 执行检测 选取start_date开始日期数据，n_year内通过股价，交易额分位进行情绪判断买点，并给出标的和行业的估值参考
-    ##result = detect_price_volume_reversal(test_stocks, start_date = "20230501", n_years=1) 
-    #N_YEARS = 3
-    #result = detect_price_volume_reversal(test_stocks, start_date = "20160501", n_years=N_YEARS)
-    #end_date = datetime.now().strftime("%Y%m%d")
-    #if ISMY_SELECT:
-    #    filename = f'.\output\detect\detect_volume_reversal{end_date}_my.xlsx'
-    #else:
-    #    filename = f'.\output\detect\detect_volume_reversal{end_date}.xlsx'
-    
-    #print(f"检查成功检测数：{len(result)}")
-    #save_to_excel_filter(result,test_stocks,filename)
 
 
 

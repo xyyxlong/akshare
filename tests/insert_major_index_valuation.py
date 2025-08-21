@@ -232,12 +232,13 @@ def get_pe_percentile_list(df: pd.DataFrame, penamelist: list[str], year_window:
 
 if __name__ == "__main__":
     # 使用示例
-    # df = get_major_index_valuation()
-    df = get_index_pe_his('沪深300')
-    year_window = 3  # 回测时间窗口为5年
-    pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
+    df = get_major_index_valuation()
     
-    # percent = '{:.2f}'.format(get_pe_percentile(df, "20240806",pename, year_window))
+    # df = get_index_pe_his('沪深300')
+    # year_window = 3  # 回测时间窗口为5年
+    # pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
+    
+    # percent = '{:.2f}'.format(get_pe_percentile(df, "20250815",pename, year_window))
     # print(df.iloc[-1])
     # print(f"{pename} {year_window} year percent: {percent}%")
     
@@ -247,10 +248,10 @@ if __name__ == "__main__":
     # df.to_excel(filename, index=False)
     # print(df[['日期', pename, 'percentile']].tail(10))
     
-    penamelist = ['pe_static', 'pe_ttm', 'pe_static_median', 'pe_ttm_median', 'pe_equal_weight_static', 'pe_equal_weight_ttm']
-    percent_df = get_pe_percentile_list(df, penamelist, year_window)
-    # 合并原始df和百分位df
-    merged_df = pd.concat([df.reset_index(drop=True), percent_df.drop(columns=['日期']).reset_index(drop=True)], axis=1)
-    merged_df.to_excel(base_path / f'..\output/index_pe_with_percentile_{year_window}year.xlsx', index=False)
-    print(merged_df.tail(10))
+    # penamelist = ['pe_static', 'pe_ttm', 'pe_static_median', 'pe_ttm_median', 'pe_equal_weight_static', 'pe_equal_weight_ttm']
+    # percent_df = get_pe_percentile_list(df, penamelist, year_window)
+    # # 合并原始df和百分位df
+    # merged_df = pd.concat([df.reset_index(drop=True), percent_df.drop(columns=['日期']).reset_index(drop=True)], axis=1)
+    # merged_df.to_excel(base_path / f'..\output/index_pe_with_percentile_{year_window}year.xlsx', index=False)
+    # print(merged_df.tail(10))
     

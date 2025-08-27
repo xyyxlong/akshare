@@ -81,6 +81,22 @@
 
 ## 更新说明详情
 
+1.17.42 fix: fix reits_realtime_em interface
+
+	1. 修复 reits_realtime_em 接口
+
+1.17.41 fix: fix stock_info_global_ths interface
+
+	1. 修复 stock_info_global_ths 接口
+
+1.17.40 fix: fix stock_gdfx_free_holding_change_em interface
+
+	1. 修复 stock_gdfx_free_holding_change_em 接口
+
+1.17.39 fix: fix bond_zh_cov_value_analysis interface
+
+	1. 修复 bond_zh_cov_value_analysis 接口
+
 1.17.38 fix: fix futures_inventory_99 interface
 
 	1. 修复 futures_inventory_99 接口
@@ -5746,6 +5762,14 @@
     3. 修改 air_quality_hist 接口的请求日期格式，从 '2022-01-01' 为 '20220101'
 
 ## 版本更新说明
+
+1.17.42 fix: fix reits_realtime_em interface
+
+1.17.41 fix: fix stock_info_global_ths interface
+
+1.17.40 fix: fix stock_gdfx_free_holding_change_em interface
+
+1.17.39 fix: fix bond_zh_cov_value_analysis interface
 
 1.17.38 fix: fix futures_inventory_99 interface
 

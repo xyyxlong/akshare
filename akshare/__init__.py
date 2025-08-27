@@ -3145,9 +3145,13 @@ amac_manager_cancelled_info # 中国证券投资基金业协会-信息公示-诚
 1.17.36 fix: fix futures_hist_em interface
 1.17.37 fix: fix stock_zh_index_daily_em interface
 1.17.38 fix: fix futures_inventory_99 interface
+1.17.39 fix: fix bond_zh_cov_value_analysis interface
+1.17.40 fix: fix stock_gdfx_free_holding_change_em interface
+1.17.41 fix: fix stock_info_global_ths interface
+1.17.42 fix: fix reits_realtime_em interface
 """
 
-__version__ = "1.17.38"
+__version__ = "1.17.42"
 __author__ = "AKFamily"
 
 import sys
@@ -3354,7 +3358,6 @@ from akshare.stock_feature.stock_info import (
     stock_info_global_futu,
     stock_info_global_sina,
     stock_info_global_cls,
-    stock_info_broker_sina,
 )
 
 """

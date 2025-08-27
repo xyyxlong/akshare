@@ -784,7 +784,7 @@ if __name__ == "__main__":
     #回测N_YEARS年百分位
     N_YEARS = 3 
     #回测开始日期
-    START_DATE = "20200701" 
+    START_DATE = "20060701" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
     IS_MYSQL = True
     #是否检测自选True/False

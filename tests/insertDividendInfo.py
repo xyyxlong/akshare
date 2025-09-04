@@ -45,10 +45,10 @@ REVERSE_ALLOTMENT_MAP = {v: k for k, v in ALLOTMENT_COLUMNS_MAP.items()}
 class InsertDividendInfo:
     def __init__(self):
         #akshare接口连续失败调用的上限以及失败次数记录
-        self.MAX_TRYTIMES = 3
+        self.MAX_TRYTIMES = 5
         self.AK_TRYTIME = 0
         #akshare接口调用失败的休眠时间
-        self.AK_TRY_FAILD_SLEEPTIME = 60
+        self.AK_TRY_FAILD_SLEEPTIME = 80
 
         
 

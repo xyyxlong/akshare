@@ -32,6 +32,7 @@ class StockValuationCalculator:
         """
         self.db_config = db_config
         self.connection = None
+        self.dividend_cache = {}  # 添加分红数据缓存
         
     def connect_to_database(self):
         """建立数据库连接"""
@@ -100,6 +101,96 @@ class StockValuationCalculator:
         except Exception as e:
             log.error(f"获取股票 {stock_code} 价格数据失败: {e}")
             return pd.DataFrame()
+        
+    def get_dividend_data(self, stock_code: str) -> pd.DataFrame:
+        """
+        获取指定股票的所有分红数据
+        Args:
+            stock_code: 股票代码
+        Returns:
+            包含分红数据的DataFrame
+        """
+        # 检查缓存
+        if stock_code in self.dividend_cache:
+            return self.dividend_cache[stock_code]
+            
+        try:
+            with self.connection.cursor() as cursor:
+                sql = """
+                SELECT stock_code, equity_reg_date, cash_dividend, progress
+                FROM dividend_info 
+                WHERE stock_code = %s AND cash_dividend > 0 
+                AND progress = '实施'
+                ORDER BY equity_reg_date
+                """
+                cursor.execute(sql, (stock_code,))
+                result = cursor.fetchall()
+                
+                if not result:
+                    log.debug(f"股票 {stock_code} 没有分红数据")
+                    return pd.DataFrame()
+                
+                df = pd.DataFrame(result)
+                df['equity_reg_date'] = pd.to_datetime(df['equity_reg_date'])
+                
+                # 计算每股分红（将每10股分红转换为每股分红）
+                df['dividend_per_share'] = df['cash_dividend'] / 10.0
+                
+                # 缓存数据
+                self.dividend_cache[stock_code] = df
+                
+                return df
+                
+        except Exception as e:
+            log.error(f"获取股票 {stock_code} 分红数据失败: {e}")
+            return pd.DataFrame()
+    
+    def calculate_dividend_yield(self, stock_code: str, price_df: pd.DataFrame) -> pd.Series:
+        """
+        计算股息率（最近12个月股息率）
+        Args:
+            stock_code: 股票代码
+            price_df: 包含日期和收盘价的数据框
+        Returns:
+            包含每日股息率的Series
+        """
+        dividend_df = self.get_dividend_data(stock_code)
+        if dividend_df.empty:
+            return pd.Series(index=price_df.index, data=0.0)
+        
+        # 确保equity_reg_date是datetime类型
+        if dividend_df['equity_reg_date'].dtype == 'object':
+            dividend_df['equity_reg_date'] = pd.to_datetime(dividend_df['equity_reg_date'])
+        
+        # 创建日期范围
+        date_range = price_df.index
+        
+        # 初始化股息率序列
+        dividend_yield_series = pd.Series(index=date_range, data=0.0)
+        
+        for current_date in date_range:
+            # 计算最近12个月的日期范围
+            one_year_ago = current_date - pd.DateOffset(years=1)
+            
+            # 筛选最近12个月内的分红（现在都是datetime类型，可以比较）
+            recent_dividends = dividend_df[
+                (dividend_df['equity_reg_date'] > one_year_ago) & 
+                (dividend_df['equity_reg_date'] <= current_date)
+            ]
+            
+            if not recent_dividends.empty:
+                # 计算最近12个月总分红
+                total_dividend = recent_dividends['dividend_per_share'].sum()
+                
+                # 获取当前股价
+                current_price = price_df.loc[current_date, 'close']
+                
+                # 计算股息率（总分红/股价）
+                if current_price > 0:
+                    dividend_yield = float(total_dividend) / float(current_price) * 100  # 都转换为float再计算
+                    dividend_yield_series.loc[current_date] = round(dividend_yield, 4)
+        
+        return dividend_yield_series  
         
     def get_previous_fiscal_year_report(self, stock_code: str, as_of_date: str) -> Optional[Dict]:
         """
@@ -319,6 +410,9 @@ class StockValuationCalculator:
             log.error(f"股票 {stock_code} 没有价格数据")
             return pd.DataFrame()
         
+        # 计算股息率
+        dividend_yield_series = self.calculate_dividend_yield(stock_code, price_df)
+        
         valuation_data = []
         
         for date, row in price_df.iterrows():
@@ -349,6 +443,10 @@ class StockValuationCalculator:
             pe_ttm = self.calculate_pe_ttm(close_price, eps_ttm) if eps_ttm else None
             pb = self.calculate_pb_ratio(close_price, navps) if navps else None
             
+            # 获取股息率
+            dv_ratio = dividend_yield_series.loc[date] if date in dividend_yield_series.index else 0.0
+            dv_ttm = dv_ratio  # 使用相同的值作为TTM股息率
+            
             # 估算总市值（需要根据实际情况实现）
             market_cap = self.estimate_market_cap(stock_code, date_str, close_price)
             
@@ -360,8 +458,8 @@ class StockValuationCalculator:
                 'pe': pe,
                 'pe_ttm': pe_ttm,
                 'pb': pb,
-                'dv_ratio': 0.0,  # 需要股息数据
-                'dv_ttm': 0.0,    # 需要股息数据
+                'dv_ratio': dv_ratio,
+                'dv_ttm': dv_ttm,
                 'ps': None,       # 需要营收数据
                 'ps_ttm': None,   # 需要营收数据
                 'total_mv': market_cap,
@@ -387,18 +485,6 @@ class StockValuationCalculator:
             return None
         return price / revenue_per_share
     
-    def calculate_dividend_yield(self, dividend_per_share: float, price: float) -> Optional[float]:
-        """
-        计算股息率
-        Args:
-            dividend_per_share: 每股股息
-            price: 股价
-        Returns:
-            股息率，如果计算失败返回None
-        """
-        if dividend_per_share is None or price is None or price <= 0:
-            return None
-        return dividend_per_share / price * 100  # 转换为百分比
     
     def get_revenue_per_share(self, financial_data: Dict, total_shares: float) -> Optional[float]:
         """

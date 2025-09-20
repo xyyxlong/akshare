@@ -7,11 +7,111 @@ import log4ak
 import getAllStock as gas
 import commTools as ct
 
-df = gas.get_select_stocks()
-df_list = ct.df_dflist(df,10)
+
+def get_stock_historical_market_cap(stock_code):
+    """
+    通过 AKShare 获取指定股票的历史市值数据
+
+    Parameters:
+    stock_code (str): 股票代码，例如 '600519'（贵州茅台）
+
+    Returns:
+    pandas.DataFrame: 包含历史市值数据的 DataFrame，包含日期和市值两列
+    """
+    # 使用 stock_zh_valuation_baidu 接口获取历史市值数据
+    # indicator 参数指定为 "总市值"
+    market_cap_df = ak.stock_zh_valuation_baidu(symbol=stock_code, indicator="市盈率(TTM)",period = "全部")
+    
+    # 确保数据列名清晰
+    market_cap_df = market_cap_df.rename(columns={'date': '日期', 'value': '市盈率(TTM)'})
+    
+    # 按日期排序（确保数据按时间顺序排列）
+    market_cap_df = market_cap_df.sort_values(by='日期').reset_index(drop=True)
+    
+    return market_cap_df
+
+def get_stock_repurchase_info(stock_code):
+    """
+    通过 AKShare 获取指定股票的历史回购信息
+    
+    参数:
+    stock_code (str): 股票代码，例如 '002986'
+    
+    返回:
+    pandas.DataFrame: 包含回购信息的 DataFrame
+    """
+    try:
+        # 获取全部 A 股回购信息
+        repurchase_df = ak.stock_repurchase_em()
+        
+        if not repurchase_df.empty:        
+            repurchase_df.to_excel(f'.\\output\\repurchase_info.xlsx', index=False)
+
+        
+        # 筛选指定股票的回购信息
+        stock_repurchase_df = repurchase_df[repurchase_df['股票代码'] == stock_code]
+        
+        if stock_repurchase_df.empty:
+            print(f"未找到股票代码 {stock_code} 的回购信息")
+            return pd.DataFrame()
+        
+        # 按日期排序
+        stock_repurchase_df = stock_repurchase_df.sort_values('公告日期', ascending=False)
+        
+        return stock_repurchase_df
+        
+    except Exception as e:
+        print(f"获取回购信息时发生错误: {e}")
+        return pd.DataFrame()
+    
+    
+# 示例使用
+if __name__ == "__main__":
+    # 输入你想要查询的股票代码
+    stock_code = '600900'
+    
+    # 获取回购信息
+    repurchase_info = get_stock_repurchase_info(stock_code)
+    
+    if not repurchase_info.empty:
+        print(f"股票 {stock_code} 的历史回购信息：")
+        # 显示所有列
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', None)
+               
+        print(repurchase_info)
+        
+        # 获取数据的时间范围
+        if '公告日期' in repurchase_info.columns:
+            date_range = f"{repurchase_info['公告日期'].min()} 至 {repurchase_info['公告日期'].max()}"
+            print(f"\n数据日期范围: {date_range}")
+        
+        print(f"回购记录条数: {len(repurchase_info)} 条")
+    else:
+        print("未找到该股票的回购信息")
+        
+    
+    # try:
+    #     # 获取历史市值数据
+    #     historical_market_cap = get_stock_historical_market_cap(stock_code)
+        
+    #     # 打印前几行数据查看
+    #     print(f"股票 {stock_code} 的历史市盈率(TTM)数据：")
+    #     print(historical_market_cap.head())
+    #     historical_market_cap.to_excel(f'.\\output\\{stock_code}_historical_pe_ttm.xlsx', index=False)
+        
+    #     # 获取数据的时间范围
+    #     date_range = f"{historical_market_cap['日期'].min()} 至 {historical_market_cap['日期'].max()}"
+    #     print(f"\n数据日期范围: {date_range}")
+    #     print(f"数据记录条数: {len(historical_market_cap)} 条")
+        
+    # except Exception as e:
+    #     print(f"获取数据时发生错误: {e}")
+    #     print("可能的原因：股票代码错误、网络连接问题或接口变更")
 
 
-
+# df = gas.get_select_stocks()
+# df_list = ct.df_dflist(df,10)
 
 #以下是对该代码的分步解释，结合相关技术文档进行说明：
 

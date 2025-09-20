@@ -229,7 +229,7 @@ def test_buy_signals(code:str, name:str,hist_data: pd.DataFrame) -> list:
             # 获取指定日期的PE
             onedayPE = gs.get_stock_pe(code,date.strftime('%Y%m%d'))            
             #判断指定日期股息率>
-            dv_ratio =  onedayPE['dv_ratio'].iloc[0] if onedayPE is not None else -1
+            dv_ttm =  onedayPE['dv_ttm'].iloc[0] if onedayPE is not None else -1
 
             hs300PEttm_percentile = imiv.get_pe_percentile(DF_HS300PETTM,date.strftime('%Y%m%d'), imiv.PE_TTM,PE300_PERCENTILE_YEAR) if IS_BUY_K else 0
         
@@ -238,7 +238,7 @@ def test_buy_signals(code:str, name:str,hist_data: pd.DataFrame) -> list:
                 'A股代码': code,
                 'buydate': date,
                 'price/pe': pp,
-                'dv_ratio':dv_ratio,
+                'dv_ttm':dv_ttm,
                 '300%':  '{:.2f}'.format(hs300PEttm_percentile),
                 '名称': name,
             })
@@ -782,7 +782,7 @@ if __name__ == "__main__":
     #自选文件
     my_select= base_path / r"..\input\selectlist_my.xlsx"
     #回测N_YEARS年百分位
-    N_YEARS = 3 
+    N_YEARS = 5 
     #回测开始日期
     START_DATE = "20160701" 
     #PE数据来源，使用数据库速度快很多：数据库/Akshare  True/False
@@ -792,7 +792,7 @@ if __name__ == "__main__":
     #是否对所有检测标的输出结果True/False
     ISALL = True
 
-    PE_ROLLING_TIME = 3 #滚动PE百分位时间配置，默认5年
+    PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
     PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
 
     #检测自选股买点，只展现有买点可能性的标的

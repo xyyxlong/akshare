@@ -60,7 +60,8 @@ def get_stock_pe_his(stock_code: str) -> pd.DataFrame:
             trade_date AS `日期`, 
             pe, 
             pe_ttm,
-            dv_ratio 
+            dv_ratio,
+            dv_ttm
         FROM stock_pe_history 
         WHERE stock_code = %s 
         ORDER BY trade_date

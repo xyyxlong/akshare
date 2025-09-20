@@ -127,11 +127,12 @@ VALUES
 
 SELECT COUNT(DISTINCT stock_pe_history.`stock_code`) AS Num_pe FROM stock_pe_history
 SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="600900" AND dv_ratio=0 ORDER BY `trade_date` DESC 
+SELECT * FROM `stock_pe_history`  WHERE stock_code="601919" ORDER BY `trade_date` DESC 
+SELECT * FROM `stock_pe_history`  WHERE stock_code="600900" AND trade_date >= '2019-12-29' ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
 SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="301090"  AND  trade_date = "20240620" 
 SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_code IN 
-("600036","000858","601919","000333","002555","002602","002460","002738")
+("600900","000858","601919","000333","002555","002602","002460","002738")
 
 	SELECT trade_date AS `日期`, pe, pe_ttm 
         FROM stock_pe_history 
@@ -140,10 +141,10 @@ SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_
 
 
 DELETE FROM stock_pe_history
-WHERE trade_date >= '2025-07-01';
+WHERE trade_date >= '2025-07-01' ;
 
 DELETE FROM stock_pe_history
-WHERE stock_code="600900"  AND dv_ratio=0;
+WHERE stock_code="600900"  AND trade_date >= '2020-01-01' AND trade_date <= '2020-03-30' AND pe_ttm=NULL;
  
 -- 分红信息表
 CREATE TABLE dividend_info (
@@ -161,8 +162,8 @@ CREATE TABLE dividend_info (
     UNIQUE KEY (stock_code, announcement_date)
 ) COMMENT '股票分红信息表';
 
-SELECT * FROM dividend_info WHERE stock_code = '600900' ORDER BY `ex_dividend_date` DESC
-SELECT COUNT(*) FROM dividend_info WHERE stock_code IN ('300146','600183','600596','600598','600618','601336')
+SELECT * FROM dividend_info WHERE stock_code = '601919' ORDER BY `ex_dividend_date` DESC
+SELECT COUNT(*) FROM dividend_info WHERE stock_code IN ('600900','601919','600596','600598','600618','601336')
 SELECT COUNT(DISTINCT stock_code) FROM dividend_info
 
                 SELECT stock_code, equity_reg_date, cash_dividend, progress
@@ -170,6 +171,18 @@ SELECT COUNT(DISTINCT stock_code) FROM dividend_info
                 WHERE stock_code = '600900' AND cash_dividend > 0 
                 AND progress = '实施'
                 ORDER BY equity_reg_date
+                
+                SELECT cash_dividend, equity_reg_date 
+                FROM dividend_info 
+                WHERE stock_code = '600900' 
+                AND progress = '实施'
+                AND (
+                    (YEAR(equity_reg_date) = '2024' AND MONTH(equity_reg_date) != 1) OR
+                    (YEAR(equity_reg_date) = '2025' AND MONTH(equity_reg_date) = 1)
+                )
+                AND cash_dividend > 0 
+                ORDER BY equity_reg_date DESC
+                LIMIT 1
                 
 SELECT * FROM dividend_info WHERE equity_reg_date = 0000-00-00
 
@@ -218,7 +231,7 @@ CREATE TABLE stock_historical_data (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data WHERE stock_code='603713' AND DATE< '2018-07-31' AND DATE> '2018-06-30'  ORDER BY DATE DESC
+SELECT * FROM stock_historical_data WHERE stock_code='600900' AND DATE< '2020-03-31' AND DATE> '2020-01-01'  ORDER BY DATE DESC
 SELECT * FROM stock_historical_data WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data
@@ -245,8 +258,8 @@ CREATE TABLE stock_historical_data_qfq (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='603506' AND DATE>'2010-06-01'
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='601088' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' AND DATE>'2010-06-01'
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq
@@ -358,7 +371,7 @@ CREATE TABLE stock_financial_reports (
     
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='上市公司财报数据表（含88字段完整版）';
 
-SELECT * FROM stock_financial_reports WHERE stock_code = '601088' ORDER BY report_date DESC
+SELECT * FROM stock_financial_reports WHERE stock_code = '600900' ORDER BY report_date DESC
 SELECT COUNT(*) FROM stock_financial_reports WHERE stock_code = '000001' ORDER BY report_date DESC
 SELECT COUNT(DISTINCT(stock_code)) FROM stock_financial_reports
 

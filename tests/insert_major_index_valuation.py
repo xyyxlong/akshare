@@ -232,15 +232,15 @@ def get_pe_percentile_list(df: pd.DataFrame, penamelist: list[str], year_window:
 
 if __name__ == "__main__":
     # 使用示例
-    # df = get_major_index_valuation()
+    df = get_major_index_valuation()
     
-    df = get_index_pe_his('创业板50')
-    year_window = 5  # 回测时间窗口为5年
-    pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
+    # df = get_index_pe_his('沪深300')
+    # year_window = 3  # 回测时间窗口为5年
+    # pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
     
-    percent = '{:.2f}'.format(get_pe_percentile(df, "20250919",pename, year_window))
-    print(df.iloc[-1])
-    print(f"{pename} {year_window} year percent: {percent}%")
+    # percent = '{:.2f}'.format(get_pe_percentile(df, "20250923",pename, year_window))
+    # print(df.iloc[-1])
+    # print(f"{pename} {year_window} year percent: {percent}%")
     
     # percentlist= get_pe_percentile_list(df, pename, year_window)
     # df['percentile'] = percentlist

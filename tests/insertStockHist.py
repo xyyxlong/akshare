@@ -34,10 +34,10 @@ REVERSE_COLUMN_MAP = {v: k for k, v in COLUMN_MAP.items()}
 class StockHistoricalData:
     def __init__(self):
         #akshare接口连续失败调用的上限以及失败次数记录
-        self.MAX_TRYTIMES = 3
+        self.MAX_TRYTIMES = 5
         #self.AK_TRYTIME = 0
         #akshare接口调用失败的休眠时间
-        self.AK_TRY_FAILD_SLEEPTIME = 60
+        self.AK_TRY_FAILD_SLEEPTIME = 256
         
 
     def fetch_stock_data(self, stock_code: str, period: str = "daily", 
@@ -148,7 +148,7 @@ class StockHistoricalData:
                 total_inserted += inserted
                 
                 # 避免请求过快
-                time.sleep(1)
+                time.sleep(2)
         
         log.info(f"所有股票处理完成，共插入 {total_inserted} 条记录")
 

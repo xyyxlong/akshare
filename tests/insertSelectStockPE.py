@@ -1,3 +1,4 @@
+
 import time
 import numpy as np
 import akshare as ak
@@ -29,8 +30,15 @@ def insertSelectStockPE(path:str):
     ## 存入所选的A股上市公司历史PE
     if path == "all":
         stock_zh_a_spot_df = get_all_stocks()
-    else:
-        stock_zh_a_spot_df = get_select_stocks()
+    else: 
+        if path is not None and path != "":
+            select_path=path
+        else:
+            select_path= r"..\input\selectlist.xlsx"            
+        
+        log.info(f"读取自选文件路径为:{select_path}")                    
+        stock_zh_a_spot_df = get_select_stocks(select_path)
+        
 
     log.info("获取到所选的 A 股上市公司列表")
     df_stock = stock_zh_a_spot_df[['代码','名称']]#[2868:]
@@ -198,11 +206,14 @@ class ConsecutiveErrorException(Exception):
 
 
 if __name__ == "__main__":
-    #df = insertSelectStockPE(SELECT_PATH)
+    
+    #自选文件
+    my_select= r"..\input\selectlist.xlsx"
+    df = insertSelectStockPE(my_select)
 
     #查询所有股票PE并入库
     
-    df = insertSelectStockPE("")#all
+    # df = insertSelectStockPE("")#"all"
 
     #导出Excel并自动调整列宽[4](@ref)
     #with pd.ExcelWriter(".\output\output.xlsx") as writer:

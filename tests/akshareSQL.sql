@@ -127,12 +127,30 @@ VALUES
 
 SELECT COUNT(DISTINCT stock_pe_history.`stock_code`) AS Num_pe FROM stock_pe_history
 SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="601919" ORDER BY `trade_date` DESC 
+SELECT * FROM `stock_pe_history`  WHERE stock_code="000333" ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="600900" AND trade_date >= '2019-12-29' ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
 SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="301090"  AND  trade_date = "20240620" 
-SELECT DISTINCT stock_pe_history.`stock_code` FROM stock_pe_history WHERE stock_code IN 
-("600900","000858","601919","000333","002555","002602","002460","002738")
+
+-- 最近一个月日均股息率(dv_ttm)最高的10支股票
+SELECT 
+    stock_code AS '股票代码',
+    stock_name AS '股票名称',
+    AVG(dv_ttm) AS '日均股息率',
+    COUNT(trade_date) AS '有效交易日数'
+FROM 
+    stock_pe_history
+WHERE 
+    trade_date >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)
+    AND dv_ttm IS NOT NULL
+GROUP BY 
+    stock_code, stock_name
+ORDER BY 
+    AVG(dv_ttm) DESC
+LIMIT 10;
+
+SELECT * FROM stock_pe_history WHERE trade_date ='2025-09-30' AND
+stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
 
 	SELECT trade_date AS `日期`, pe, pe_ttm 
         FROM stock_pe_history 
@@ -232,9 +250,11 @@ CREATE TABLE stock_historical_data (
 ) COMMENT '股票历史行情数据表';
 
 SELECT * FROM stock_historical_data WHERE stock_code='600900' AND DATE< '2020-03-31' AND DATE> '2020-01-01'  ORDER BY DATE DESC
+SELECT * FROM stock_historical_data WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
+
 SELECT * FROM stock_historical_data WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2025-09-1';
 SELECT DISTINCT stock_code FROM stock_historical_data
 DELETE FROM stock_historical_data WHERE DATE = '2025-07-21';
 14753282
@@ -259,6 +279,7 @@ CREATE TABLE stock_historical_data_qfq (
 ) COMMENT '股票历史行情数据表';
 
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' AND DATE>'2010-06-01'
+SELECT * FROM stock_historical_data_qfq WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq

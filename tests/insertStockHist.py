@@ -34,7 +34,7 @@ REVERSE_COLUMN_MAP = {v: k for k, v in COLUMN_MAP.items()}
 class StockHistoricalData:
     def __init__(self):
         #akshare接口连续失败调用的上限以及失败次数记录
-        self.MAX_TRYTIMES = 5
+        self.MAX_TRYTIMES = 3
         #self.AK_TRYTIME = 0
         #akshare接口调用失败的休眠时间
         self.AK_TRY_FAILD_SLEEPTIME = 256

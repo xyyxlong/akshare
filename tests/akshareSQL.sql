@@ -254,7 +254,7 @@ SELECT * FROM stock_historical_data WHERE DATE='2025-09-30' AND stock_code IN ("
 
 SELECT * FROM stock_historical_data WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2025-09-1';
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2025-09-30';
 SELECT DISTINCT stock_code FROM stock_historical_data
 DELETE FROM stock_historical_data WHERE DATE = '2025-07-21';
 14753282
@@ -282,7 +282,7 @@ SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' AND DATE>'2010
 SELECT * FROM stock_historical_data_qfq WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq WHERE DATE = '2025-09-30';
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq
 
 DELETE FROM stock_historical_data_qfq WHERE DATE = '2025-07-21';

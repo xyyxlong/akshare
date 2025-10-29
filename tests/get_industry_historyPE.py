@@ -327,10 +327,10 @@ def test_get_stock_industry_pe_mysql() -> None:
 if __name__ == "__main__":
     # 示例：查询贵州茅台行业
     #df = get_industry_info("000858")
-    #df = ak.stock_industry_pe_ratio_cninfo("证监会行业分类","20241223")
+    df = ak.stock_industry_pe_ratio_cninfo("证监会行业分类","20241223")
     #df_to_excel(df)
 
-    test_get_stock_industry_pe_mysql()
+    # test_get_stock_industry_pe_mysql()
 
 
     #df = get_stock_industry_valuation("000858")

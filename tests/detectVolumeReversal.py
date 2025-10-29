@@ -277,7 +277,8 @@ def get_stock_data(code: str, start_date: str) -> pd.DataFrame:
     df = pd.DataFrame()
     
     if IS_MYSQL:
-        df = ish.get_stock_data_from_mysql(code_clean,'qfq')
+        # df = ish.get_stock_data_from_mysql(code_clean,'qfq')
+        df = ish.get_stock_data_from_mysql(code_clean,'')
         df = df[['日期', '收盘', '成交额']].copy()
         start_date_dt = pd.to_datetime(start_date, format='%Y%m%d')
         df['日期']= pd.to_datetime(df['日期'], format='%Y%m%d')

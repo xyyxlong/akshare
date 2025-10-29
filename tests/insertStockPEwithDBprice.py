@@ -815,8 +815,8 @@ def main():
     所以在该时间点之后的PE等估值指标会和以前的有断层。    
     未来可以考虑从数据库中获取历史数据，减少对akshare的依赖
     """
-    start_date = '2025-09-10'
-    end_date = '2025-09-30'
+    start_date = '2025-10-20'
+    end_date = '2025-10-28'
     
     # 创建估值计算器
     calculator = StockValuationCalculator(DB_CONFIG)

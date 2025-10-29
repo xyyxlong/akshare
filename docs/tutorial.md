@@ -32,7 +32,7 @@
  "futures_spot_price_daily"  # 一段交易日大宗商品现货价格及相应基差数据
  "futures_czce_warehouse_receipt"  # 郑州商品交易所-交易数据-仓单日报
  "futures_shfe_warehouse_receipt"  # 上海期货交易所-交易数据-仓单日报
- "futures_dce_warehouse_receipt"  # 大连商品交易所-交易数据-仓单日报
+ "futures_warehouse_receipt_dce"  # 大连商品交易所-交易数据-仓单日报
  "futures_gfex_warehouse_receipt"  # 广州期货交易所-行情数据-仓单日报
  "futures_rule"  # 国泰君安-交易日历
  # 奇货可查数据
@@ -47,11 +47,13 @@
  # 中国银行间市场交易商协会-非金融企业债务融资工具注册信息系统
  "bond_debt_nafmii"  # 中国银行间市场交易商协会-非金融企业债务融资工具注册信息系统
  # 交易所商品期权数据
- "option_dce_daily"  # 提供大连商品交易所商品期权数据
- "option_czce_daily"  # 提供郑州商品交易所商品期权数据
- "option_shfe_daily"  # 提供上海期货交易所商品期权数据
- "option_gfex_daily"  # 提供广州期货交易所商品期权数据
- "option_gfex_vol_daily"  # 提供广州期货交易所-合约隐含波动率数据
+ "option_hist_dce"  # 提供大连商品交易所商品期权数据
+ "option_hist_czce"  # 提供郑州商品交易所商品期权数据
+ "option_hist_shfe"  # 提供上海期货交易所商品期权数据
+ "option_hist_gfex"  # 提供广州期货交易所商品期权数据
+ "option_vol_gfex"  # 提供广州期货交易所-合约隐含波动率数据
+ "option_vol_shfe"  # 提供上海期货交易所-合约隐含波动率数据
+ "option_hist_yearly_czce"  # 郑州商品交易所-交易数据-历史行情下载-期权历史行情下载
  # 中国银行间市场债券行情数据
  "get_bond_market_quote"  # 债券市场行情-现券市场成交行情数据
  "get_bond_market_trade"  # 债券市场行情-现券市场做市报价数据
@@ -330,7 +332,7 @@
  "bond_cb_redeem_jsl"  # 可转债-集思录可转债-强赎
  # 金融期权-新浪
  "option_cffex_sz50_list_sina"  # 上证50期权列表
-  "option_cffex_sz50_spot_sina"  # 沪深300期权实时行情
+ "option_cffex_sz50_spot_sina"  # 沪深300期权实时行情
  "option_cffex_sz50_daily_sina"  # 沪深300期权历史行情-日频
  "option_cffex_hs300_list_sina"  # 沪深300期权列表
  "option_cffex_hs300_spot_sina"  # 沪深300期权实时行情
@@ -406,7 +408,6 @@
  "futures_spot_stock"  # 现货与股票接口
  # 中证商品指数
  "futures_index_ccidx"  # 中证商品指数
- "futures_index_min_ccidx"  # 中证商品指数-分时
  # 打新收益率
  "stock_dxsyl_em"  # 打新收益率
  "stock_xgsglb_em"  # 新股申购与中签查询
@@ -479,7 +480,6 @@
  "stock_index_pe_lg"  # 乐咕乐股-指数市盈率
  "stock_market_pb_lg"  # 乐咕乐股-主板市净率
  "stock_index_pb_lg"  # 乐咕乐股-指数市净率
- "stock_a_indicator_lg"  # A 股个股市盈率、市净率和股息率指标
  "stock_hk_indicator_eniu"  # 港股股个股市盈率、市净率和股息率指标
  "stock_a_high_low_statistics"  # 创新高和新低的股票数量
  "stock_a_below_net_asset_statistics"  # 破净股统计
@@ -815,6 +815,7 @@
  # REITs
  "reits_realtime_em"  #  REITs-实时行情
  "reits_hist_em"  #  REITs-历史行情
+ "reits_hist_min_em"  #  REITs-历史分钟行情
  # A 股分时数据
  "stock_zh_a_hist_min_em"  # 东财-股票分时
  "stock_zh_a_hist_pre_min_em"  # 东财-股票盘前分时
@@ -1187,6 +1188,8 @@
  "stock_esg_zd_sina"  # 新浪财经-ESG评级中心-ESG评级-秩鼎
  "stock_esg_hz_sina"  # 新浪财经-ESG评级中心-ESG评级-华证指数
  # 基金公告
+ "fund_announcement_dividend_em"  # 东方财富网站-天天基金网-基金档案-基金公告-分红配送
+ "fund_announcement_report_em"  # 东方财富网站-天天基金网-基金档案-基金公告-定期报告
  "fund_announcement_personnel_em"  # 东方财富网站-天天基金网-基金档案-基金公告-人事调整
  # 互动易
  "stock_irm_cninfo"  # 互动易-提问
@@ -1305,6 +1308,8 @@
  "volatility_yz_rv"  # 已实现波动率计算
  # 东方财富网-数据中心-估值分析-每日互动-每日互动-估值分析
  "stock_value_em"  # 东方财富网-数据中心-估值分析-每日互动-每日互动-估值分析
+ # 基金基本概况
+ "fund_overview_em"  # 基金基本概况
  # 基金费率
  "fund_fee_em"  # 基金费率
  # 期货行情-东方财富
@@ -1333,6 +1338,18 @@
  # 东方财富-港股-公司资料
  "stock_hk_security_profile_em"  # 港股-证券资料
  "stock_hk_company_profile_em"  # 港股-公司资料
+ # 东方财富-港股-核心必读
+ "stock_hk_financial_indicator_em"  # 港股-最新指标
+ "stock_hk_dividend_payout_em"  # 港股-分红派息
+ # 东方财富-港股-行业对比
+ "stock_hk_growth_comparison_em"  # 港股-行业对比-成长性对比
+ "stock_hk_valuation_comparison_em"  # 港股-行业对比-估值对比
+ "stock_hk_scale_comparison_em"  # 港股-行业对比-规模对比
+ # 东方财富-行情中心-同行比较
+ "stock_zh_growth_comparison_em"  # 行情中心-同行比较-成长性比较
+ "stock_zh_valuation_comparison_em"  # 行情中心-同行比较-估值比较
+ "stock_zh_dupont_comparison_em"  # 行情中心-同行比较-杜邦分析比较
+ "stock_zh_scale_comparison_em"  # 行情中心-同行比较-公司规模
  # 期权保证金
  "option_margin"  # 期权保证金
  # 全部AB股比价
@@ -1341,6 +1358,11 @@
  "index_csindex_all"  # 中证指数网站-指数列表
  # 东方财富-A股-财务分析-主要指标
  "stock_financial_analysis_indicator_em"  # 东方财富-A股-财务分析-主要指标
+ # 中国外汇交易中心暨全国银行间同业拆借中心-基准-外汇市场-外汇掉期曲线-外汇掉漆 C-Swap 定盘曲线
+ "fx_c_swap_cm"  # 中国外汇交易中心暨全国银行间同业拆借中心-基准-外汇市场-外汇掉期曲线-外汇掉漆 C-Swap 定盘曲线
+ # 股票期权
+ "option_current_day_szse"  # 深圳证券交易所-期权子网-行情数据-当日合约
+ "option_current_day_sse"  # 上海证券交易所-产品-股票期权-信息披露-当日合约
 ```
 
 ## 案例演示

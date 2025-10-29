@@ -3149,9 +3149,43 @@ amac_manager_cancelled_info # 中国证券投资基金业协会-信息公示-诚
 1.17.40 fix: fix stock_gdfx_free_holding_change_em interface
 1.17.41 fix: fix stock_info_global_ths interface
 1.17.42 fix: fix reits_realtime_em interface
+1.17.43 fix: fix fund_rating_all interface
+1.17.44 fix: fix stock_individual_spot_xq interface
+1.17.45 fix: fix stock_dxsyl_em interface
+1.17.46 fix: fix stock_financial_us_analysis_indicator_em interface
+1.17.47 fix: fix get_receipt interface
+1.17.48 fix: fix stock_hk_dividend_payout_em interface
+1.17.49 fix: fix option_czce_daily interface
+1.17.50 fix: fix option_current_day_szse interface
+1.17.51 fix: fix fund_manager_em interface
+1.17.52 fix: fix fund_overview_em interface
+1.17.53 fix: fix reits_hist_min_em interface
+1.17.54 fix: fix fund_announcement_dividend_em interface
+1.17.55 fix: fix stock_zh_growth_comparison_em interface
+1.17.56 fix: fix stock_balance_sheet_by_report_delisted_em interface
+1.17.57 fix: fix stock_szse_summary interface
+1.17.58 fix: fix fund_etf_fund_daily_em interface
+1.17.59 fix: fix fx_c_swap_cm interface
+1.17.60 fix: fix stock_intraday_sina interface
+1.17.61 fix: fix stock_individual_spot_xq interface
+1.17.62 fix: fix futures_dce_warehouse_receipt interface
+1.17.63 fix: fix stock_financial_analysis_indicator_em interface
+1.17.64 fix: fix stock_individual_spot_xq interface
+1.17.65 fix: fix futures_dce_warehouse_receipt interface
+1.17.66 fix: fix futures_delivery_czce interface
+1.17.67 fix: fix stock_zh_a_hist_tx interface
+1.17.68 fix: fix option_hist_dce interface
+1.17.69 fix: fix fund_etf_hist_sina interface
+1.17.70 fix: fix macro_stock_finance interface
+1.17.71 fix: fix futures_inventory_99 interface
+1.17.72 fix: fix futures_warehouse_receipt_dce interface
+1.17.73 fix: fix get_receipt interface
+1.17.74 fix: fix futures_dce_position_rank interface
+1.17.75 fix: fix stock_a_ttm_lyr interface
+1.17.76 fix: fix futures_index_ccidx interface
 """
 
-__version__ = "1.17.42"
+__version__ = "1.17.76"
 __author__ = "AKFamily"
 
 import sys
@@ -3174,6 +3208,21 @@ if sys.version_info < (3, 9):
 del sys
 
 """
+中国外汇交易中心暨全国银行间同业拆借中心-基准-外汇市场-外汇掉期曲线-外汇掉漆 C-Swap 定盘曲线
+"""
+from akshare.fx.fx_c_swap_cm import fx_c_swap_cm
+
+"""
+上海证券交易所-产品-股票期权-信息披露-当日合约
+"""
+from akshare.option.option_current_sse import option_current_day_sse
+
+"""
+深圳证券交易所-期权子网-行情数据-当日合约
+"""
+from akshare.option.option_current_szse import option_current_day_szse
+
+"""
 东方财富-A股-财务分析-主要指标
 """
 from akshare.stock_fundamental.stock_finance_sina import stock_financial_analysis_indicator_em
@@ -3187,6 +3236,21 @@ from akshare.option.option_margin import option_margin, option_margin_symbol
 东方财富-港股-证券资料
 """
 from akshare.stock.stock_profile_em import stock_hk_company_profile_em, stock_hk_security_profile_em
+
+"""
+东方财富-港股-核心必读
+"""
+from akshare.stock.stock_profile_em import stock_hk_dividend_payout_em, stock_hk_financial_indicator_em
+
+"""
+东方财富-港股-行业对比
+"""
+from akshare.stock.stock_hk_comparison_em import stock_hk_growth_comparison_em, stock_hk_valuation_comparison_em, stock_hk_scale_comparison_em
+
+"""
+东方财富-行情中心-同行比较
+"""
+from akshare.stock.stock_zh_comparison_em import stock_zh_growth_comparison_em, stock_zh_valuation_comparison_em, stock_zh_dupont_comparison_em, stock_zh_scale_comparison_em
 
 """
 东方财富网-行情中心-债券市场-质押式回购
@@ -3253,6 +3317,11 @@ from akshare.futures.futures_hist_em import futures_hist_table_em, futures_hist_
 巨潮资讯-数据中心-专题统计-股东股本-股本变动
 """
 from akshare.stock.stock_hold_control_cninfo import stock_hold_change_cninfo
+
+"""
+天天基金-基金档案-基金基本概况
+"""
+from akshare.fund.fund_overview_em import fund_overview_em
 
 """
 基金费率
@@ -3486,9 +3555,19 @@ from akshare.stock_feature.stock_irm_cninfo import (
 )
 
 """
+基金公告-分红配送
+"""
+from akshare.fund.fund_announcement_em import fund_announcement_dividend_em
+
+"""
+基金公告-定期报告
+"""
+from akshare.fund.fund_announcement_em import fund_announcement_report_em
+
+"""
 基金公告-人事公告
 """
-from akshare.fund.fund_announcement import fund_announcement_personnel_em
+from akshare.fund.fund_announcement_em import fund_announcement_personnel_em
 
 """
 新浪财经-ESG评级中心
@@ -3755,6 +3834,11 @@ from akshare.currency.currency_safe import currency_boc_safe
 from akshare.option.option_risk_indicator_sse import option_risk_indicator_sse
 
 """
+期权-上海证券交易所-当日合约
+"""
+from akshare.option.option_risk_indicator_sse import option_risk_indicator_sse
+"""
+
 全球宏观事件
 """
 from akshare.news.news_baidu import (
@@ -4132,7 +4216,7 @@ from akshare.stock.stock_us_pink import stock_us_pink_spot_em
 """
 REITs
 """
-from akshare.reits.reits_basic import reits_realtime_em, reits_hist_em
+from akshare.reits.reits_basic import reits_realtime_em, reits_hist_em, reits_hist_min_em
 
 """
 全部 A 股-等权重市盈率、中位数市盈率
@@ -4764,7 +4848,6 @@ from akshare.stock_feature.stock_a_pe_and_pb import (
     stock_index_pe_lg,
 )
 from akshare.stock_feature.stock_a_indicator import (
-    stock_a_indicator_lg,
     stock_hk_indicator_eniu,
 )
 from akshare.stock_feature.stock_a_high_low import stock_a_high_low_statistics
@@ -4790,7 +4873,7 @@ futures-warehouse-receipt
 """
 from akshare.futures.futures_warehouse_receipt import (
     futures_czce_warehouse_receipt,
-    futures_dce_warehouse_receipt,
+    futures_warehouse_receipt_dce,
     futures_shfe_warehouse_receipt,
     futures_gfex_warehouse_receipt,
 )
@@ -4925,10 +5008,7 @@ from akshare.article.fred_md import fred_md, fred_qd
 """
 中证商品指数
 """
-from akshare.futures.futures_index_ccidx import (
-    futures_index_min_ccidx,
-    futures_index_ccidx,
-)
+from akshare.futures.futures_index_ccidx import futures_index_ccidx
 
 """
 futures_em_spot_stock
@@ -5099,7 +5179,7 @@ from akshare.fx.currency_investing import (
 """
 商品期权-郑州商品交易所-期权-历史数据
 """
-from akshare.option.option_czce import option_czce_hist
+from akshare.option.option_czce import option_hist_yearly_czce
 
 """
 宏观-经济数据-银行间拆借利率
@@ -5573,11 +5653,12 @@ from akshare.bond.bond_china import (
 商品期权
 """
 from akshare.option.option_commodity import (
-    option_dce_daily,
-    option_czce_daily,
-    option_shfe_daily,
-    option_gfex_vol_daily,
-    option_gfex_daily,
+    option_hist_dce,
+    option_hist_czce,
+    option_hist_shfe,
+    option_vol_gfex,
+    option_hist_gfex,
+    option_vol_shfe,
 )
 
 """

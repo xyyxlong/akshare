@@ -324,19 +324,20 @@ def get_stock_industry_pe(stock_code: str) -> pd.DataFrame:
     last_trade_date = ct.get_last_trade_dates()
     # 获取估值
     # 获取行业PE数据（网页2接口）
-    pe_df = ak.stock_industry_pe_ratio_cninfo(
-        symbol="证监会行业分类",
-        date = last_trade_date)
+    # 2025-11-1之后接口变更 share接口不可用
+    # pe_df = ak.stock_industry_pe_ratio_cninfo(
+    #     symbol="证监会行业分类",
+    #     date = last_trade_date)
 
-    if industry is not None and pe_df is not None:
-        # 数据筛选与格式化（网页2字段结构）
-        result = pe_df[pe_df["行业编码"] == industry["行业编码"].values[0]].rename(columns={
-            '变动日期': '日期',
-            '静态市盈率-加权平均': 'PE静-加权',
-            '静态市盈率-中位数': 'PE静-中位',
-            '静态市盈率-算术平均': 'PE静-平均',
-            '行业名称':'行业'
-        })
+    # if industry is not None and pe_df is not None:
+    #     # 数据筛选与格式化（网页2字段结构）
+    #     result = pe_df[pe_df["行业编码"] == industry["行业编码"].values[0]].rename(columns={
+    #         '变动日期': '日期',
+    #         '静态市盈率-加权平均': 'PE静-加权',
+    #         '静态市盈率-中位数': 'PE静-中位',
+    #         '静态市盈率-算术平均': 'PE静-平均',
+    #         '行业名称':'行业'
+    #     })
 
     return result
 
@@ -394,12 +395,12 @@ def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
                 all_industry_pe = None
                 all_stock_pe = None
                 df_industry_historyPE = []
-                df_industry_historyPE = gi.get_stock_industry_pe_mysql(code)
+                # 2025-11-1之后接口变更 share接口不可用
+                # df_industry_historyPE = gi.get_stock_industry_pe_mysql(code)
 
 
                  # 获取行业信息
-                df_industry_historyPE = gi.get_stock_industry_pe_mysql(code)
-                if df_industry_historyPE is not None:
+                if df_industry_historyPE is not None and len(df_industry_historyPE)>0:
                     industry_info = df_industry_historyPE['industry_info']
                     industry_code = industry_info['行业编码'].values[0]
                     # 获取完整的行业历史PE（尽可能早的数据）
@@ -460,7 +461,7 @@ def getPE_after_detect(result: list, stock_list: pd.DataFrame)-> list:
                                 current_pe = df.at[current_date, 'pe_ttm']
                                 if not pd.isna(current_pe):
                                     rank = np.sum(window_data <= current_pe) / len(window_data)
-                                    df.at[current_date, 'stock_pe_percentile'] = rank * 100
+                                    df.at[current_date, 'stock_pe_percentile'] = rank
                                     df.at[current_date, 'stock_pe_mask'] = (rank * 100) <= PE_PERCENTILE
             
                 # 5. 设置最终索引格式

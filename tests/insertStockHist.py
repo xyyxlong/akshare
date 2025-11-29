@@ -37,7 +37,8 @@ class StockHistoricalData:
         self.MAX_TRYTIMES = 3
         #self.AK_TRYTIME = 0
         #akshare接口调用失败的休眠时间
-        self.AK_TRY_FAILD_SLEEPTIME = 256
+        self.AK_TRY_FAILD_SLEEPTIME = 600
+        self.WAITTIME = 10  # 请求间隔时间，避免过快请求导致被封IP
         
 
     def fetch_stock_data(self, stock_code: str, period: str = "daily", 
@@ -148,7 +149,7 @@ class StockHistoricalData:
                 total_inserted += inserted
                 
                 # 避免请求过快
-                time.sleep(2)
+                time.sleep(self.WAITTIME)
         
         log.info(f"所有股票处理完成，共插入 {total_inserted} 条记录")
 
@@ -195,19 +196,22 @@ if __name__ == "__main__":
     
     # 股票代码列表（示例）
     #stock_codes = pd.DataFrame(data=['600900'],columns=['代码'])
+    # time.sleep(3600)
     
     # 批量处理股票
-    processor.batch_process_stocks(
-        stock_codes=stock_codes,
-        period="daily",
-        adjust="qfq"
-    )
-
     processor.batch_process_stocks(
     stock_codes=stock_codes,
     period="daily",
     adjust=""
     )
+    
+    # processor.batch_process_stocks(
+    #     stock_codes=stock_codes,
+    #     period="daily",
+    #     adjust="qfq"
+    # )
+
+
     
     # 从数据库查询示例
     #df = get_stock_data_from_mysql("002466", "","20230101", "20231231")

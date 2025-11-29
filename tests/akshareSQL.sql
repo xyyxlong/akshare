@@ -130,7 +130,7 @@ SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date`
 SELECT * FROM `stock_pe_history`  WHERE stock_code="000333" ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="600900" AND trade_date >= '2019-12-29' ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
-SELECT COUNT(*) FROM stock_pe_history WHERE stock_code="301090"  AND  trade_date = "20240620" 
+SELECT COUNT(*) FROM stock_pe_history WHERE trade_date > "20250930" 
 
 -- 最近一个月日均股息率(dv_ttm)最高的10支股票
 SELECT 
@@ -159,7 +159,7 @@ stock_code IN ("600900","000858","601919","000333","002555","002602","002460","0
 
 
 DELETE FROM stock_pe_history
-WHERE trade_date >= '2025-07-01' ;
+WHERE trade_date >= '2025-09-29' ;
 
 DELETE FROM stock_pe_history
 WHERE stock_code="600900"  AND trade_date >= '2020-01-01' AND trade_date <= '2020-03-30' AND pe_ttm=NULL;
@@ -254,7 +254,7 @@ SELECT * FROM stock_historical_data WHERE DATE='2025-09-30' AND stock_code IN ("
 
 SELECT * FROM stock_historical_data WHERE stock_code='600900' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2025-09-30';
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2025-09-30' AND stock_code='000963'; 
 SELECT DISTINCT stock_code FROM stock_historical_data
 DELETE FROM stock_historical_data WHERE DATE = '2025-07-21';
 14753282
@@ -281,6 +281,7 @@ CREATE TABLE stock_historical_data_qfq (
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' AND DATE>'2010-06-01'
 SELECT * FROM stock_historical_data_qfq WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data_qfq ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq WHERE DATE = '2025-09-30';
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq

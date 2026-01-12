@@ -196,7 +196,7 @@ if __name__ == "__main__":
     
     # 股票代码列表（示例）
     #stock_codes = pd.DataFrame(data=['600900'],columns=['代码'])
-    # time.sleep(3600)
+    # time.sleep(1800)
     
     # 批量处理股票
     processor.batch_process_stocks(
@@ -205,11 +205,11 @@ if __name__ == "__main__":
     adjust=""
     )
     
-    # processor.batch_process_stocks(
-    #     stock_codes=stock_codes,
-    #     period="daily",
-    #     adjust="qfq"
-    # )
+    processor.batch_process_stocks(
+        stock_codes=stock_codes,
+        period="daily",
+        adjust="qfq"
+    )
 
 
     

@@ -199,11 +199,11 @@ if __name__ == "__main__":
     # time.sleep(1800)
     
     # 批量处理股票
-    processor.batch_process_stocks(
-    stock_codes=stock_codes,
-    period="daily",
-    adjust=""
-    )
+    # processor.batch_process_stocks(
+    # stock_codes=stock_codes,
+    # period="daily",
+    # adjust=""
+    # )
     
     processor.batch_process_stocks(
         stock_codes=stock_codes,

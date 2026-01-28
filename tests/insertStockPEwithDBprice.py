@@ -264,12 +264,11 @@ class StockValuationCalculator:
             log.error(f"获取股票 {stock_code} 最新季报数据失败: {e}")
             return None
     
-    def get_previous_quarter_report(self, stock_code: str, as_of_date: str, current_report_date: str) -> Optional[Dict]:
+    def get_previous_quarter_report(self, stock_code: str, current_report_date: str) -> Optional[Dict]:
         """
         获取指定日期前上一个季度的财报数据
         Args:
             stock_code: 股票代码
-            as_of_date: 基准日期
             current_report_date: 当前报告日期
         Returns:
             财报数据字典
@@ -278,11 +277,11 @@ class StockValuationCalculator:
             with self.connection.cursor() as cursor:
                 sql = """
                 SELECT * FROM stock_financial_reports 
-                WHERE stock_code = %s AND report_date < %s AND report_date <= %s
+                WHERE stock_code = %s AND report_date <= %s
                 ORDER BY report_date DESC 
                 LIMIT 1
                 """
-                cursor.execute(sql, (stock_code, current_report_date, as_of_date))
+                cursor.execute(sql, (stock_code, current_report_date))
                 result = cursor.fetchone()
                 return result
         except Exception as e:
@@ -311,7 +310,7 @@ class StockValuationCalculator:
                 if result:
                     log.debug(f"找到股票 {stock_code} 在 {report_date} 的财报数据")
                 else:
-                    log.error(f"未找到股票 {stock_code} 在 {report_date} 的财报数据")
+                    log.info(f"未找到股票 {stock_code} 在 {report_date} 的财报数据")
                     
                 return result
                 
@@ -486,6 +485,7 @@ class StockValuationCalculator:
             
             if not previous_year_period_report:
                 # 如果没找到精确日期的报告，可以尝试获取该日期之前最近的一份报告（例如上年Q2结束日可能不是同一天）
+                log.debug(f"找到股票 {stock_code} 在 {previous_year_period_date} 的财报数据, 获取该日期之前最近的一份报告")
                 previous_year_period_report = self.get_previous_quarter_report(stock_code, previous_year_period_date)
             
             if not previous_year_period_report:
@@ -718,13 +718,27 @@ class StockValuationCalculator:
         
         try:
             with self.connection.cursor() as cursor:
-                # 准备插入SQL
+                # 准备插入SQL,将 INSERT IGNORE语句改为在遇到主键冲突时执行更新操作
                 sql = """
-                INSERT IGNORE INTO stock_pe_history (
+                INSERT INTO stock_pe_history (
                     stock_code, stock_name, trade_date, pe, pe_ttm, pb, 
                     dv_ratio, dv_ttm, ps, ps_ttm, total_mv
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    stock_name = VALUES(stock_name),
+                    pe = VALUES(pe),
+                    pe_ttm = VALUES(pe_ttm),
+                    pb = VALUES(pb),
+                    dv_ratio = VALUES(dv_ratio),
+                    dv_ttm = VALUES(dv_ttm),
+                    ps = VALUES(ps),
+                    ps_ttm = VALUES(ps_ttm),
+                    total_mv = VALUES(total_mv);
                 """
+                # INSERT IGNORE INTO stock_pe_history (
+                #     stock_code, stock_name, trade_date, pe, pe_ttm, pb, 
+                #     dv_ratio, dv_ttm, ps, ps_ttm, total_mv
+                # ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 
                 # 准备数据
                 data_to_insert = []
@@ -815,8 +829,8 @@ def main():
     所以在该时间点之后的PE等估值指标会和以前的有断层。    
     未来可以考虑从数据库中获取历史数据，减少对akshare的依赖
     """
-    start_date = '2025-12-1'
-    end_date = '2026-1-8'
+    start_date = '2025-12-31'
+    end_date = '2026-1-27'
     
     # 创建估值计算器
     calculator = StockValuationCalculator(DB_CONFIG)

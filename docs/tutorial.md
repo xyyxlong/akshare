@@ -11,7 +11,7 @@
  "get_cffex_daily",  # 中国金融期货交易所每日交易数据
  "get_cffex_rank_table",  # 中国金融期货交易所前20会员持仓数据明细
  "get_czce_daily",  # 郑州商品交易所每日交易数据
- "get_czce_rank_table",  # 郑州商品交易所前20会员持仓数据明细
+ "get_rank_table_czce",  # 郑州商品交易所前20会员持仓数据明细
  "get_dce_daily",  # 大连商品交易所每日交易数据
  "get_gfex_daily",  # 广州期货交易所每日交易数据
  "get_ine_daily",  # 上海国际能源交易中心每日交易数据
@@ -30,7 +30,7 @@
  "futures_spot_price",  # 具体交易日大宗商品现货价格及相应基差数据
  "futures_spot_price_previous",  # 具体交易日大宗商品现货价格及相应基差数据-该接口补充历史数据
  "futures_spot_price_daily"  # 一段交易日大宗商品现货价格及相应基差数据
- "futures_czce_warehouse_receipt"  # 郑州商品交易所-交易数据-仓单日报
+ "futures_warehouse_receipt_czce"  # 郑州商品交易所-交易数据-仓单日报
  "futures_shfe_warehouse_receipt"  # 上海期货交易所-交易数据-仓单日报
  "futures_warehouse_receipt_dce"  # 大连商品交易所-交易数据-仓单日报
  "futures_gfex_warehouse_receipt"  # 广州期货交易所-行情数据-仓单日报
@@ -168,8 +168,6 @@
  "energy_carbon_eu"  # 碳排放权-国际
  "energy_carbon_hb"  # 碳排放权-湖北
  "energy_carbon_gz"  # 碳排放权-广州
- # 生活成本
- "cost_living"  # 世界各大城市生活成本数据
  # 商品现货价格指数
  "spot_goods"  # 商品现货价格指数
  # 中国宏观杠杆率
@@ -390,7 +388,6 @@
  "stock_comment_detail_zhpj_lspf_em"  # 综合评价-历史评分
  "stock_comment_detail_scrd_focus_em"  # 市场热度-用户关注指数
  "stock_comment_detail_scrd_desire_em"  # 市场热度-市场参与意愿
- "stock_comment_detail_scrd_desire_daily_em"  # 市场热度-日度市场参与意愿
  # 沪深港通
  "stock_hk_ggt_components_em"  # 港股通成份股
  "stock_hsgt_hold_stock_em"  # 沪深港通持股-个股排行
@@ -433,6 +430,8 @@
  "stock_financial_analysis_indicator"  # 财务指标
  "stock_add_stock"  # 股票增发
  "stock_ipo_info"  # 股票新股
+ "stock_ipo_ths"  # 新股申购与中签
+ "stock_ipo_hk_ths"  # 新股申购与中签
  "stock_history_dividend_detail"  # 分红配股
  "stock_history_dividend"  # 历史分红
  "stock_dividend_cninfo"  # 个股历史分红
@@ -484,7 +483,7 @@
  "stock_a_high_low_statistics"  # 创新高和新低的股票数量
  "stock_a_below_net_asset_statistics"  # 破净股统计
  # 交易日历
- "tool_trade_date_hist"  # 新浪财经-交易日历
+ "tool_trade_date_hist_sina"  # 新浪财经-交易日历
  # 基金行情
  "fund_etf_category_sina"  # 基金实时行情-新浪
  "fund_etf_hist_sina"  # 基金行情-新浪
@@ -584,7 +583,8 @@
  # 胡润排行榜
  "hurun_rank"  # 胡润排行榜
  # 期货合约详情
- "futures_contract_detail"  # 期货合约详情
+ "futures_contract_detail"  # 新浪期货合约详情
+ "futures_contract_detail_em"  # 东方财富期货合约详情
  # 科创板报告
  "stock_zh_kcb_report_em"  # 科创板报告
  # 东方财富-期权
@@ -648,7 +648,7 @@
  "stock_lrb_em"  # 三大表报-利润表
  "stock_xjll_em"  # 三大表报-现金流量表
  # 首发企业申报
- "stock_ipo_declare"  # 首发企业申报
+ "stock_ipo_declare_em"  # 首发企业申报
  # 行业板块
  "stock_board_industry_index_ths"  # 同花顺-行业板块-指数日频数据
  # 概念板块
@@ -668,6 +668,7 @@
  "stock_ggcg_em"  # 高管持股
  # 新发基金
  "fund_new_found_em"  # 新发基金
+ "fund_new_found_ths"  # 新发基金
  # 柯桥指数
  "index_kq_fz"  # 柯桥纺织指数
  "index_kq_fashion"  # 柯桥时尚指数
@@ -1173,10 +1174,10 @@
  "stock_hk_index_spot_em"  # 东方财富网-行情中心-港股-指数实时行情
  "stock_hk_index_daily_em"  # 东方财富网-港股-股票指数数据
  # 同花顺-财务指标-主要指标
- "stock_financial_abstract_ths"  # 同花顺-财务指标-主要指标
- "stock_financial_debt_ths"  # 同花顺-财务指标-资产负债表
- "stock_financial_benefit_ths"  # 同花顺-财务指标-利润表
- "stock_financial_cash_ths"  # 同花顺-财务指标-现金流量表
+ "stock_financial_abstract_new_ths"  # 同花顺-财务指标-主要指标
+ "stock_financial_debt_new_ths"  # 同花顺-财务指标-资产负债表
+ "stock_financial_benefit_new_ths"  # 同花顺-财务指标-利润表
+ "stock_financial_cash_new_ths"  # 同花顺-财务指标-现金流量表
  # LOF 行情
  "fund_lof_hist_em"  # 东方财富-LOF 行情
  "fund_lof_spot_em"  # 东方财富-LOF 实时行情
@@ -1363,6 +1364,18 @@
  # 股票期权
  "option_current_day_szse"  # 深圳证券交易所-期权子网-行情数据-当日合约
  "option_current_day_sse"  # 上海证券交易所-产品-股票期权-信息披露-当日合约
+ # 期权合约信息
+ "option_contract_info_ctp"  # 期权合约信息
+ # 百度股市通-美股-财务报表-估值数据
+ "stock_us_valuation_baidu"  # 百度股市通-美股-财务报表-估值数据
+ # 基金份额
+ "fund_etf_scale_szse"  # 深圳证券交易所-基金产品-基金列表-ETF基金份额
+ "fund_etf_scale_sse"  # 上海证券交易所-产品-基金产品-ETF产品-ETF产品列表-基金规模
+ # 新浪财经-债券-美国国债收益率行情数据
+ "bond_gb_us_sina"  # 新浪财经-债券-美国国债收益率行情数据
+ "bond_gb_zh_sina"  # 新浪财经-债券-中国国债收益率行情数据
+ # 期货交易所结算参数
+ "futures_settle"  # 期货交易所结算参数
 ```
 
 ## 案例演示

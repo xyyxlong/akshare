@@ -3183,29 +3183,104 @@ amac_manager_cancelled_info # 中国证券投资基金业协会-信息公示-诚
 1.17.74 fix: fix futures_dce_position_rank interface
 1.17.75 fix: fix stock_a_ttm_lyr interface
 1.17.76 fix: fix futures_index_ccidx interface
+1.17.77 fix: fix get_dce_daily interface
+1.17.78 fix: fix update python 3.14 support
+1.17.79 fix: fix futures_contract_info_dce interface
+1.17.80 fix: fix futures_contract_detail_em interface
+1.17.81 fix: fix get_receipt interface
+1.17.82 fix: fix stock_notice_report interface
+1.17.83 fix: fix stock_cyq_em interface
+1.17.84 fix: fix stock_individual_spot_xq interface
+1.17.85 fix: fix news_trade_notify_dividend_baidu interface
+1.17.86 fix: fix stock_news_em interface
+1.17.87 fix: fix stock_dividend_cninfo interface
+1.17.88 fix: fix stock_zh_a_minute interface
+1.17.89 fix: fix news_trade_notify_dividend_baidu interface
+1.17.90 fix: fix stock_individual_spot_xq interface
+1.17.91 fix: fix news_economic_baidu interface
+1.17.92 fix: fix currency_boc_sina interface
+1.17.93 fix: fix stock_news_em interface
+1.17.94 fix: fix index_detail_cni interface
+1.17.95 fix: fix stock_info_sh_name_code interface
+1.17.96 fix: fix stock_info_sh_name_code interface
+1.17.97 fix: fix stock_financial_debt_new_ths interface
+1.17.98 fix: fix stock_jgdy_tj_em interface
+1.17.99 fix: fix stock_news_em interface
+1.18.1 fix: fix stock_us_valuation_baidu interface
+1.18.2 fix: fix stock_ipo_declare_em interface
+1.18.3 fix: fix stock_ipo_tutor_em interface
+1.18.4 fix: fix stock_zh_a_daily interface
+1.18.5 fix: fix futures_inventory_99 interface
+1.18.6 fix: fix fund_fee_em interface
+1.18.7 fix: fix stock_us_valuation_baidu interface
+1.18.8 fix: fix stock_zh_valuation_comparison_em interface
+1.18.9 fix: fix fx_quote_baidu interface
+1.18.10 fix: fix futures_comm_info interface
+1.18.11 fix: fix stock_individual_spot_xq interface
+1.18.12 fix: fix news_economic_baidu interface
+1.18.13 fix: fix futures_spot_price_daily interface
+1.18.14 fix: fix fund_etf_scale_szse interface
+1.18.15 fix: fix fund_etf_scale_sse interface
+1.18.16 fix: fix news_economic_baidu interface
+1.18.17 fix: fix stock_individual_spot_xq interface
+1.18.18 fix: fix stock_individual_spot_xq interface
+1.18.19 fix: fix github action
+1.18.20 fix: fix stock_individual_spot_xq interface
+1.18.21 fix: fix get_receipt interface
+1.18.22 fix: fix bond_gb_zh_sina interface
+1.18.23 fix: fix fund_fee_em interface
+1.18.24 fix: fix stock_individual_spot_xq interface
+1.18.25 fix: fix qdii_e_comm_jsl interface
+1.18.26 fix: fix fund_fh_em interface
+1.18.27 fix: fix futures_comm_js interface
+1.18.28 fix: fix futures_spot_price_daily interface
+1.18.29 fix: fix stock_individual_basic_info_xq interface
+1.18.30 fix: fix futures_inventory_99 interface
+1.18.31 fix: fix stock_hk_dividend_payout_em interface
+1.18.32 fix: fix fund_new_found_ths interface
+1.18.33 fix: fix futures_spot_price_daily interface
+1.18.34 fix: fix fund_fh_em interface
+1.18.35 fix: fix stock_ipo_ths interface
+1.18.36 fix: fix stock_zygc_em interface
+1.18.37 fix: fix fund_etf_dividend_sina interface
+1.18.38 fix: fix stock_hk_index_daily_sina interface
+1.18.39 fix: fix stock_hk_daily interface
+1.18.40 fix: fix stock_hk_daily interface
+1.18.41 fix: fix stock_zh_a_minute interface
+1.18.42 fix: fix stock_zh_a_minute interface
+1.18.43 fix: fix stock_financial_abstract_new_ths interface
+1.18.44 fix: fix index_option_50etf_qvix interface
+1.18.45 fix: fix stock_a_high_low_statistics interface
+1.18.46 fix: fix stock_a_all_pb interface
+1.18.47 fix: fix stock_margin_underlying_info_szse interface
+1.18.48 fix: fix stock_individual_spot_xq interface
+1.18.49 fix: fix macro_china_urban_unemployment interface
 """
 
-__version__ = "1.17.76"
+from akshare._version import __version__
 __author__ = "AKFamily"
 
-import sys
-import warnings
+"""
+期货结算
+"""
+from akshare.futures.futures_settle import (
+    futures_settle,
+    futures_settle_gfex,
+    futures_settle_ine,
+    futures_settle_czce,
+    futures_settle_cffex,
+    futures_settle_shfe,
+)
 
-import pandas as pd
+"""
+国债收益率
+"""
+from akshare.bond.bond_gb_sina import bond_gb_zh_sina, bond_gb_us_sina
 
-pd_main_version = int(pd.__version__.split('.')[0])
-
-if pd_main_version < 2:
-    warnings.warn(
-        "为了支持更多特性，请将 Pandas 升级到 2.2.0 及以上版本！"
-    )
-
-if sys.version_info < (3, 9):
-    warnings.warn(
-        "为了支持更多特性，请将 Python 升级到 3.9.0 及以上版本！"
-    )
-
-del sys
+"""
+openctp-合约信息接口
+"""
+from akshare.option.option_contract_info_ctp import option_contract_info_ctp
 
 """
 中国外汇交易中心暨全国银行间同业拆借中心-基准-外汇市场-外汇掉期曲线-外汇掉漆 C-Swap 定盘曲线
@@ -3228,7 +3303,7 @@ from akshare.option.option_current_szse import option_current_day_szse
 from akshare.stock_fundamental.stock_finance_sina import stock_financial_analysis_indicator_em
 
 """
-期权保证金 
+期权保证金
 """
 from akshare.option.option_margin import option_margin, option_margin_symbol
 
@@ -3245,12 +3320,20 @@ from akshare.stock.stock_profile_em import stock_hk_dividend_payout_em, stock_hk
 """
 东方财富-港股-行业对比
 """
-from akshare.stock.stock_hk_comparison_em import stock_hk_growth_comparison_em, stock_hk_valuation_comparison_em, stock_hk_scale_comparison_em
+from akshare.stock.stock_hk_comparison_em import (
+    stock_hk_growth_comparison_em,
+    stock_hk_valuation_comparison_em,
+    stock_hk_scale_comparison_em
+)
 
 """
 东方财富-行情中心-同行比较
 """
-from akshare.stock.stock_zh_comparison_em import stock_zh_growth_comparison_em, stock_zh_valuation_comparison_em, stock_zh_dupont_comparison_em, stock_zh_scale_comparison_em
+from akshare.stock.stock_zh_comparison_em import (stock_zh_growth_comparison_em,
+                                                  stock_zh_valuation_comparison_em,
+                                                  stock_zh_dupont_comparison_em,
+                                                  stock_zh_scale_comparison_em
+                                                  )
 
 """
 东方财富网-行情中心-债券市场-质押式回购
@@ -3261,15 +3344,6 @@ from akshare.bond.bond_buy_back_em import bond_sh_buy_back_em, bond_sz_buy_back_
 东方财富-A股数据-股本结构
 """
 from akshare.stock_fundamental.stock_gbjg_em import stock_zh_a_gbjg_em
-
-"""
-异步接口
-"""
-from akshare.stock_a.stock_zh_a_spot import stock_zh_a_spot_em as stock_zh_a_spot_em_async
-from akshare.stock_a.stock_individual_fund_flow_rank import (
-    stock_individual_fund_flow_rank as stock_individual_fund_flow_rank_async
-)
-from akshare.stock_a.stock_board_concept_name_em import stock_board_concept_name_em as stock_board_concept_name_em_async
 
 """
 雪球-个股-公司概况-公司简介
@@ -3390,7 +3464,7 @@ from akshare.option.option_daily_stats_sse_szse import option_daily_stats_sse, o
 """
 同花顺理财-基金数据-每日净值-ETF
 """
-from akshare.fund.fund_etf_ths import fund_etf_spot_ths
+from akshare.fund.fund_etf_ths import fund_etf_spot_ths, fund_etf_category_ths
 
 """
 东方财富网-数据中心-融资融券-融资融券账户统计-两融账户信息
@@ -3443,6 +3517,11 @@ from akshare.futures_derivative.futures_contract_info_ine import futures_contrac
 上海期货交易所-指定交割仓库-库存周报
 """
 from akshare.futures.futures_stock_js import futures_stock_shfe_js
+
+"""
+金十数据-期货手续费
+"""
+from akshare.futures.futures_comm_js import futures_comm_js
 
 """
 东方财富-数据中心-沪深港通-市场概括-分时数据
@@ -3597,6 +3676,10 @@ from akshare.stock_fundamental.stock_finance_ths import (
     stock_financial_debt_ths,
     stock_financial_benefit_ths,
     stock_financial_cash_ths,
+    stock_financial_abstract_new_ths,
+    stock_financial_debt_new_ths,
+    stock_financial_benefit_new_ths,
+    stock_financial_cash_new_ths,
     stock_management_change_ths,
     stock_shareholder_change_ths,
 )
@@ -3656,6 +3739,16 @@ from akshare.fund.fund_etf_em import (
     fund_etf_hist_min_em,
     fund_etf_spot_em,
 )
+
+"""
+上海证券交易所-ETF基金份额数据
+"""
+from akshare.fund.fund_etf_sse import fund_etf_scale_sse
+
+"""
+深圳证券交易所-ETF基金份额数据
+"""
+from akshare.fund.fund_etf_szse import fund_etf_scale_szse
 
 """
 乐咕乐股-股债利差
@@ -3781,6 +3874,11 @@ from akshare.stock_feature.stock_zh_valuation_baidu import stock_zh_valuation_ba
 from akshare.stock_feature.stock_hk_valuation_baidu import stock_hk_valuation_baidu
 
 """
+百度股市通-美股-财务报表-估值数据
+"""
+from akshare.stock_feature.stock_us_valuation_baidu import stock_us_valuation_baidu
+
+"""
 巨潮资讯-个股-公司概况
 """
 from akshare.stock.stock_profile_cninfo import stock_profile_cninfo
@@ -3837,6 +3935,7 @@ from akshare.option.option_risk_indicator_sse import option_risk_indicator_sse
 期权-上海证券交易所-当日合约
 """
 from akshare.option.option_risk_indicator_sse import option_risk_indicator_sse
+
 """
 
 全球宏观事件
@@ -4486,6 +4585,7 @@ from akshare.index.index_kq_ss import index_kq_fashion
 新发基金
 """
 from akshare.fund.fund_init_em import fund_new_found_em
+from akshare.fund.fund_init_ths import fund_new_found_ths
 
 """
 高管持股
@@ -4524,7 +4624,12 @@ from akshare.stock_fundamental.stock_notice import stock_notice_report
 """
 首发企业申报
 """
-from akshare.stock_fundamental.stock_ipo_declare import stock_ipo_declare
+from akshare.stock_fundamental.stock_ipo_declare import stock_ipo_declare_em
+
+"""
+辅导备案信息
+"""
+from akshare.stock_fundamental.stock_ipo_tutor import stock_ipo_tutor_em
 
 """
 三大报表
@@ -4681,7 +4786,7 @@ from akshare.stock.stock_zh_kcb_report import stock_zh_kcb_report_em
 """
 期货合约详情
 """
-from akshare.futures.futures_contract_detail import futures_contract_detail
+from akshare.futures.futures_contract_detail import futures_contract_detail, futures_contract_detail_em
 
 """
 胡润排行榜
@@ -4763,12 +4868,26 @@ from akshare.stock.stock_zh_a_special import (
 东方财富-注册制审核
 """
 from akshare.stock_fundamental.stock_register_em import (
+    stock_register_all_em,
     stock_register_kcb,
     stock_register_cyb,
     stock_register_bj,
     stock_register_db,
     stock_register_sh,
     stock_register_sz
+)
+
+"""
+东方财富-过会企业信息
+"""
+from akshare.stock_fundamental.stock_ipo_review import stock_ipo_review_em
+
+"""
+同花顺-新股申购与中签
+"""
+from akshare.stock_fundamental.stock_ipo_ths import (
+    stock_ipo_ths,
+    stock_ipo_hk_ths,
 )
 
 """
@@ -4872,7 +4991,7 @@ from akshare.stock_feature.stock_qsjy_em import stock_qsjy_em
 futures-warehouse-receipt
 """
 from akshare.futures.futures_warehouse_receipt import (
-    futures_czce_warehouse_receipt,
+    futures_warehouse_receipt_czce,
     futures_warehouse_receipt_dce,
     futures_shfe_warehouse_receipt,
     futures_gfex_warehouse_receipt,
@@ -5054,7 +5173,6 @@ from akshare.stock_feature.stock_comment_em import (
     stock_comment_detail_scrd_focus_em,
     stock_comment_detail_zhpj_lspf_em,
     stock_comment_detail_scrd_desire_em,
-    stock_comment_detail_scrd_desire_daily_em,
 )
 
 """
@@ -5241,6 +5359,7 @@ from akshare.index.index_yw import index_yw
 股票指数-股票指数-中证指数列表
 """
 from akshare.index.index_csindex import index_csindex_all
+
 """
 
 股票指数-股票指数-成份股
@@ -5312,11 +5431,6 @@ from akshare.economic.marco_cnbs import macro_cnbs
 大宗商品-现货价格指数
 """
 from akshare.index.index_spot import spot_goods
-
-"""
-成本-世界各大城市生活成本
-"""
-from akshare.cost.cost_living import cost_living
 
 """
 能源-碳排放权
@@ -5715,7 +5829,7 @@ from akshare.futures.cot import (
     get_rank_sum_daily,
     get_rank_sum,
     get_shfe_rank_table,
-    get_czce_rank_table,
+    get_rank_table_czce,
     get_dce_rank_table,
     get_cffex_rank_table,
     futures_dce_position_rank,

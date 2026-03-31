@@ -270,21 +270,19 @@
 
 #### 展期收益率
 
-期货市场中的展期收益率（Rolling Yield）是指在期货合约到期时，投资者将持有的合约换成下一个到期的合约时可能产生的收益。
-展期收益率在期货市场中具有重要意义，因为它反映了期货市场的期限结构，也可以作为投资者制定投资策略的依据。
+期货市场中的展期收益率（Rolling Yield）是指在期货合约到期时，多头投资者将持有的近月合约换成远月合约时可能产生的收益。展期收益率在期货市场中具有重要意义，因为它反映了期货市场的期限结构，也可以作为投资者制定投资策略的依据。
 
-展期收益率的计算方法是将当前期货合约的价格与下一个到期的期货合约的价格进行比较。具体计算公式如下：
+展期收益率的计算方法是将近月期货合约的价格与远月期货合约的价格进行比较。具体计算公式如下：
 
-展期收益率 = (下一个到期合约价格 - 当前到期合约价格) / 当前到期合约价格
+展期收益率 =（近月合约价格 - 远月合约价格）/ 近月合约价格
 
-展期收益率可以是正数，也可以是负数。正数表示下一个到期的合约价格高于当前到期的合约价格，投资者在展期时可以获得正向收益；
-负数表示下一个到期的合约价格低于当前到期的合约价格，投资者在展期时可能面临损失。
+展期收益率可以是正数，也可以是负数。正数表示远月合约价格低于近月合约价格，多头投资者在展期时卖出较贵的近月合约、买入较便宜的远月合约，从而获得正向收益；负数表示远月合约价格高于近月合约价格，多头投资者在展期时卖出较便宜的近月合约、买入较贵的远月合约，可能面临损失。
 
 期货市场的期限结构通常分为三种类型：
 
-1. 远期溢价（Contango）：远期合约价格高于近期合约价格，展期收益率为正。
-2. 远期折价（Backwardation）：远期合约价格低于近期合约价格，展期收益率为负。
-3. 平价（Flat）：远期合约价格与近期合约价格相同，展期收益率接近于零。
+1. 远期溢价（Contango）：远月合约价格高于近月合约价格，展期收益率为负。
+2. 远期折价（Backwardation）：远月合约价格低于近月合约价格，展期收益率为正。
+3. 平价（Flat）：远月合约价格与近月合约价格相同，展期收益率接近于零。
 
 投资者可以根据不同的期限结构和展期收益率来调整其期货交易策略，以实现收益最大化或风险最小化。
 
@@ -441,6 +439,72 @@ print(futures_comm_info_df)
 698  中国金融期货交易所     2年期国债2409  ...  2024-04-15 22:59:37.599  2024-04-15 22:58:45.832
 699  中国金融期货交易所     2年期国债2412  ...  2024-04-15 22:59:37.599  2024-04-15 22:58:45.832
 [700 rows x 21 columns]
+```
+
+##### 金十数据
+
+接口: futures_comm_js
+
+目标地址: https://www.jin10.com/
+
+描述: 金十财经-期货手续费数据
+
+限量: 单次返回指定日期的期货手续费数据
+
+输入参数
+
+| 名称   | 类型  | 描述                              |
+|------|-----|---------------------------------|
+| date | str | date="20260213"; 日期格式为 YYYYMMDD |
+
+输出参数
+
+| 名称      | 类型      | 描述 |
+|---------|---------|----|
+| 日期      | object  | -  |
+| 合约品种    | str     | -  |
+| 合约代码    | str     | -  |
+| 手续费公布时间 | str     | -  |
+| 价格公布时间  | str     | -  |
+| 现价      | float64 | -  |
+| 涨停板     | float64 | -  |
+| 跌停板     | float64 | -  |
+| 保证金/买开  | str     | -  |
+| 保证金/卖开  | str     | -  |
+| 保证金/每手  | str     | -  |
+| 开仓      | str     | -  |
+| 平今      | str     | -  |
+| 平昨      | str     | -  |
+| 每手跳数    | int64   | -  |
+| 每跳毛利    | float64 | -  |
+| 每跳净利    | float64 | -  |
+| 交易所     | str     | -  |
+
+接口示例
+
+```python
+import akshare as ak
+
+futures_comm_js_df = ak.futures_comm_js(date="20260213")
+print(futures_comm_js_df)
+```
+
+数据示例
+
+```
+    日期        合约品种    合约代码  ... 每跳毛利   每跳净利         交易所
+0   2026-02-13      黄金2604  au2604  ...  NaN    0.0     上海期货交易所
+1   2026-02-13      鸡蛋2604  jd2604  ...  NaN    0.5     大连商品交易所
+2   2026-02-13    集运指数2604  ec2604  ...  NaN -105.5  上海国际能源交易中心
+3   2026-02-13       锰硅605   SM605  ...  NaN    7.0     郑州商品交易所
+4   2026-02-13     铸造铝2604  ad2604  ...  NaN   38.9     上海期货交易所
+..         ...         ...     ...  ...  ...    ...         ...
+85  2026-02-13   5年期国债2603  TF2603  ...  NaN   47.0   中国金融期货交易所
+86  2026-02-13  30年期国债2603  TL2603  ...  NaN   97.0   中国金融期货交易所
+87  2026-02-13   2年期国债2603  TS2603  ...  NaN   37.0   中国金融期货交易所
+88  2026-02-13    20号胶2604  nr2604  ...  NaN   47.3  上海国际能源交易中心
+89  2026-02-13   10年国债2603   T2603  ...  NaN   47.0   中国金融期货交易所
+[90 rows x 18 columns]
 ```
 
 #### 期货规则-交易日历表
@@ -848,7 +912,7 @@ import akshare as ak
 
 ak.get_dce_rank_table()
 ak.get_cffex_rank_table()
-ak.get_czce_rank_table()
+ak.get_rank_table_czce()
 ak.get_shfe_rank_table()
 ```
 
@@ -857,8 +921,8 @@ ak.get_shfe_rank_table()
 ```python
 import akshare as ak
 
-get_czce_rank_table_df = ak.get_czce_rank_table(date='20200213')
-print(get_czce_rank_table_df)
+get_rank_table_czce_df = ak.get_rank_table_czce(date='20200213')
+print(get_rank_table_czce_df)
 ```
 
 注意:
@@ -1073,7 +1137,7 @@ print(futures_gfex_position_rank_dict)
 
 ##### 仓单日报-郑州商品交易所
 
-接口: futures_czce_warehouse_receipt
+接口: futures_warehouse_receipt_czce
 
 目标地址: http://www.czce.com.cn/cn/jysj/cdrb/H770310index_1.htm
 
@@ -1098,8 +1162,8 @@ print(futures_gfex_position_rank_dict)
 ```python
 import akshare as ak
 
-futures_czce_warehouse_receipt_df = ak.futures_czce_warehouse_receipt(date="20200702")
-print(futures_czce_warehouse_receipt_df)
+futures_warehouse_receipt_czce_df = ak.futures_warehouse_receipt_czce(date="20200702")
+print(futures_warehouse_receipt_czce_df)
 ```
 
 数据示例
@@ -2220,9 +2284,9 @@ print(futures_contract_info_ine_df)
 
 接口: futures_contract_info_dce
 
-目标地址: http://www.dce.com.cn/dalianshangpin/ywfw/ywcs/jycs/hyxxcx/index.html
+目标地址: http://www.dce.com.cn/dce/channel/list/180.html
 
-描述: 大连商品交易所-业务/服务-业务参数-交易参数-合约信息查询
+描述: 大连商品交易所-数据中心-业务数据-交易参数-合约信息
 
 限量: 单次返回最近交易日的期货合约信息数据
 
@@ -2256,19 +2320,19 @@ print(futures_contract_info_dce_df)
 数据示例
 
 ```
-     品种  合约代码  交易单位 最小变动价位  开始交易日  最后交易日  最后交割日
-0    豆一  a2403    10     1.0  2023-03-15  2024-03-14  2024-03-19
-1    豆一  a2405    10     1.0  2023-05-18  2024-05-17  2024-05-22
-2    豆一  a2407    10     1.0  2023-07-17  2024-07-12  2024-07-17
-3    豆一  a2409    10     1.0  2023-09-15  2024-09-13  2024-09-20
-4    豆一  a2411    10     1.0  2023-11-15  2024-11-14  2024-11-19
-..   ..    ...   ...     ...         ...         ...         ...
-215  豆油  y2408    10     2.0  2023-08-15  2024-08-14  2024-08-19
-216  豆油  y2409    10     2.0  2023-09-15  2024-09-13  2024-09-20
-217  豆油  y2411    10     2.0  2023-11-15  2024-11-14  2024-11-19
-218  豆油  y2412    10     2.0  2023-12-15  2024-12-13  2024-12-18
-219  豆油  y2501    10     2.0  2024-01-16  2025-01-15  2025-01-20
-[220 rows x 7 columns]
+    品种名称 合约  交易单位  最小变动价位  开始交易日 最后交易日   最后交割日
+0     豆一  a2511    10     1.0  2024-11-15  2025-11-14  2025-11-19
+1     豆一  a2601    10     1.0  2025-01-16  2026-01-15  2026-01-20
+2     豆一  a2603    10     1.0  2025-03-17  2026-03-13  2026-03-18
+3     豆一  a2605    10     1.0  2025-05-20  2026-05-19  2026-05-22
+4     豆一  a2607    10     1.0  2025-07-15  2026-07-14  2026-07-17
+..   ...    ...   ...     ...         ...         ...         ...
+232   豆油  y2603    10     2.0  2025-03-17  2026-03-13  2026-03-18
+233   豆油  y2605    10     2.0  2025-05-20  2026-05-19  2026-05-22
+234   豆油  y2607    10     2.0  2025-07-15  2026-07-14  2026-07-17
+235   豆油  y2608    10     2.0  2025-08-15  2026-08-14  2026-08-19
+236   豆油  y2609    10     2.0  2025-09-15  2026-09-14  2026-09-17
+[237 rows x 7 columns]
 ```
 
 ##### 郑州商品交易所
@@ -2832,7 +2896,7 @@ print(futures_zh_minute_sina_df)
 
 目标地址: https://qhweb.eastmoney.com/quote
 
-描述: 东方财富网-期货行情-行情数据
+描述: 东方财富网-期货行情-行情数据；其中 weekly, monthly 获取的成交额和持仓量未经验证
 
 限量: 单次返回指定 symbol 的所有数据; 只能获取当期合约;
 
@@ -3029,6 +3093,75 @@ print(get_futures_daily_df)
 2751    L99  20200716  7213.86  ...  7156.44    7220.27       L
 2752    M99  20200716  2858.98  ...  2862.43    2855.63       M
 2753   JM99  20200716  1193.58  ...  1195.49    1197.92      JM
+```
+
+#### 内盘-结算参数数据
+
+接口: futures_settle
+
+目标地址: 各交易所网站
+
+描述: 提供各交易所的结算参数数据，包括保证金、手续费、涨跌停板等参数
+
+限量: 单次返回指定日期指定交易所的结算参数数据；暂不支持 DCE
+
+输入参数
+
+| 名称     | 类型  | 描述                                                                 |
+|--------|-----|--------------------------------------------------------------------|
+| date   | str | date="20250117"; 结算参数日期，默认为当前交易日                                   |
+| market | str | market="CFFEX"; choice of {"CFFEX", "INE", "CZCE", "SHFE", "GFEX"} |
+
+输出参数
+
+| 名称                       | 类型      | 描述       |
+|--------------------------|---------|----------|
+| date                     | str     | 结算日期     |
+| symbol                   | str     | 合约代码     |
+| variety                  | str     | 品种代码     |
+| settle_price             | float64 | 结算价      |
+| long_margin_ratio        | object  | 多头保证金率   |
+| short_margin_ratio       | object  | 空头保证金率   |
+| spec_long_margin_ratio   | float64 | 投机多头保证金率 |
+| spec_short_margin_ratio  | float64 | 投机空头保证金率 |
+| hedge_long_margin_ratio  | float64 | 套保多头保证金率 |
+| hedge_short_margin_ratio | float64 | 套保空头保证金率 |
+| trade_fee_ratio          | float64 | 交易手续费率   |
+| close_today_fee_ratio    | float64 | 平今手续费率   |
+| delivery_fee_ratio       | object  | 交割手续费率   |
+| is_single_market         | object  | 是否单边市    |
+| single_market_days       | object  | 连续单边市天数  |
+| limit_ratio              | object  | 涨跌停板幅度   |
+| position_limit           | object  | 持仓限额     |
+| trade_limit              | object  | 交易限额     |
+| rise_limit_rate          | object  | 涨停板比例    |
+| fall_limit_rate          | object  | 跌停板比例    |
+
+接口示例
+
+```python
+import akshare as ak
+
+futures_settle_df = ak.futures_settle(date="20260119", market="INE")
+print(futures_settle_df)
+```
+
+数据示例
+
+```
+        date  symbol variety  ...  trade_limit rise_limit_rate fall_limit_rate
+0   20260119  sc2602      sc  ...         None            None            None
+1   20260119  sc2603      sc  ...         None            None            None
+2   20260119  sc2604      sc  ...         None            None            None
+3   20260119  sc2605      sc  ...         None            None            None
+4   20260119  sc2606      sc  ...         None            None            None
+..       ...     ...     ...  ...          ...             ...             ...
+57  20260119  ec2604      ec  ...         None            None            None
+58  20260119  ec2606      ec  ...         None            None            None
+59  20260119  ec2608      ec  ...         None            None            None
+60  20260119  ec2610      ec  ...         None            None            None
+61  20260119  ec2612      ec  ...         None            None            None
+[62 rows x 20 columns]
 ```
 
 #### 外盘-品种代码表
@@ -3639,7 +3772,7 @@ print(futures_display_main_sina_df)
 62    TS0    cffex    2年期国债期货连续
 ```
 
-### 期货合约详情
+### 期货合约详情-新浪
 
 接口: futures_contract_detail
 
@@ -3770,6 +3903,59 @@ print(futures_contract_detail_df)
 11   合约交割月份                                            1---12月
 12    最后交割日                                       最后交易日后第3个交易日
 13    交易手续费                                  开平仓2元/手，短线开平仓1元/手
+14    上市交易所                                            大连商品交易所
+```
+
+### 期货合约详情-东财
+
+接口: futures_contract_detail_em
+
+目标地址: https://quote.eastmoney.com/qihuo/v2602F.html
+
+描述: 东方财富-期货-期货合约详情数据
+
+限量: 单次返回指定 symbol 的合约详情数据
+
+输入参数
+
+| 名称     | 类型  | 描述                                                                              |
+|--------|-----|---------------------------------------------------------------------------------|
+| symbol | str | symbol='v2602F'; 请参考东方财富的期货品种标识：https://quote.eastmoney.com/center/futures.html |
+
+输出参数
+
+| 名称    | 类型     | 描述       |
+|-------|--------|----------|
+| item  | object | 合约具体的项目  |
+| value | object | 合约具体的项目值 |
+
+接口示例
+
+```python
+import akshare as ak
+
+futures_contract_detail_em_df = ak.futures_contract_detail_em(symbol="v2603F")
+print(futures_contract_detail_em_df)
+```
+
+数据示例
+
+```
+       item                                              value
+0      交易品种                                               聚氯乙烯
+1    最小变动价位                                               5元/吨
+2      交易时间  上午 09:00-10:15 10:30-11:30 下午 13:30-15:00 夜间 2...
+3      交割品级  质量标准符合《悬浮法通用型聚氯乙烯树脂（GB/T 5761-2006）》规定的SG5型一等品...
+4      交割方式                                               实物交割
+5      交易单位                                               5吨/手
+6    涨跌停板幅度                                       上一交易日结算价的±4%
+7     最后交易日                                        合约月份第10个交易日
+8   最低交易保证金                                投机买卖20.0%，套保买卖20.0%
+9      交易代码                                                  V
+10     报价单位                                           元(人民币/吨)
+11   合约交割月份                                            1---12月
+12    最后交割日                                       最后交易日后第3个交易日
+13    交易手续费                                  开平仓1元/手，短线开平仓1元/手
 14    上市交易所                                            大连商品交易所
 ```
 

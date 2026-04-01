@@ -6,6 +6,7 @@ import akshare as ak
 from tqdm import tqdm
 import insert2Mysql as ins
 import log4ak
+from safeLgAPI import safe_stock_index_pe_lg, _stock_index_pe_lg_fixed
 
 base_path = Path(__file__).parent #系统绝对目录
 log = log4ak.LogManager(log_level=log4ak.INFO)# 日志配置
@@ -46,7 +47,7 @@ def get_major_index_valuation():
         print(f"......查询{name} PE")
         try:
             # 获取基础估值数据[5,9](@ref)
-            df = ak.stock_index_pe_lg(name)
+            df = _stock_index_pe_lg_fixed(name)
             df["指数代码"]=code
             df["指数名称"]=name
 
@@ -232,15 +233,15 @@ def get_pe_percentile_list(df: pd.DataFrame, penamelist: list[str], year_window:
 
 if __name__ == "__main__":
     # 使用示例
-    df = get_major_index_valuation()
+    # df = get_major_index_valuation()
     
-    # df = get_index_pe_his('沪深300')
-    # year_window = 5 # 回测时间窗口为5年
-    # pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
+    df = get_index_pe_his('沪深300')
+    year_window = 5 # 回测时间窗口为5年
+    pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
     
-    # percent = '{:.2f}'.format(get_pe_percentile(df, "20251210",pename, year_window))
-    # print(df.iloc[-1])
-    # print(f"{pename} {year_window} year percent: {percent}%")
+    percent = '{:.2f}'.format(get_pe_percentile(df, "20251210",pename, year_window))
+    print(df.iloc[-1])
+    print(f"{pename} {year_window} year percent: {percent}%")
     
     # percentlist= get_pe_percentile_list(df, pename, year_window)
     # df['percentile'] = percentlist

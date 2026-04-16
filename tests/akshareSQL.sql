@@ -127,10 +127,10 @@ VALUES
 
 SELECT COUNT(DISTINCT stock_pe_history.`stock_code`) AS Num_pe FROM stock_pe_history
 SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="000333" ORDER BY `trade_date` DESC 
+SELECT * FROM `stock_pe_history`  WHERE stock_code="002555" ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="600900" AND trade_date >= '2019-12-29' ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
-SELECT COUNT(*) FROM stock_pe_history WHERE trade_date > "20250930" 
+SELECT COUNT(DISTINCT stock_pe_history.`stock_code`)  FROM stock_pe_history WHERE trade_date > "20260310" 
 
 -- 最近一个月日均股息率(dv_ttm)最高的10支股票
 SELECT 
@@ -180,7 +180,7 @@ CREATE TABLE dividend_info (
     UNIQUE KEY (stock_code, announcement_date)
 ) COMMENT '股票分红信息表';
 
-SELECT * FROM dividend_info WHERE stock_code = '601919' ORDER BY `ex_dividend_date` DESC
+SELECT * FROM dividend_info WHERE stock_code = '600900' ORDER BY `ex_dividend_date` DESC
 SELECT COUNT(*) FROM dividend_info WHERE stock_code IN ('600900','601919','600596','600598','600618','601336')
 SELECT COUNT(DISTINCT stock_code) FROM dividend_info
 
@@ -224,7 +224,8 @@ CREATE TABLE allotment_info (
     UNIQUE KEY (stock_code, announcement_date)
 ) COMMENT '股票配股信息表';   
 
-SELECT * FROM allotment_info
+SELECT * FROM allotment_info ORDER BY `allotment_listing` DESC
+SELECT * FROM allotment_info WHERE stock_code = '600900' ORDER BY `allotment_listing` DESC
 SELECT COUNT(*) FROM allotment_info
 SELECT COUNT(DISTINCT stock_code) FROM allotment_info
 SELECT DISTINCT stock_code FROM allotment_info
@@ -252,9 +253,9 @@ CREATE TABLE stock_historical_data (
 SELECT * FROM stock_historical_data WHERE stock_code='600900' AND DATE< '2020-03-31' AND DATE> '2020-01-01'  ORDER BY DATE DESC
 SELECT * FROM stock_historical_data WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
 
-SELECT * FROM stock_historical_data WHERE stock_code='600900' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data WHERE stock_code='000333' ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2025-09-30' AND stock_code='000963'; 
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2026-01-27' AND stock_code='000963'; 
 SELECT DISTINCT stock_code FROM stock_historical_data
 DELETE FROM stock_historical_data WHERE DATE = '2025-07-21';
 14753282
@@ -278,12 +279,12 @@ CREATE TABLE stock_historical_data_qfq (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' AND DATE>'2010-06-01'
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='000333' AND DATE>'2010-06-01' 
 SELECT * FROM stock_historical_data_qfq WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='600900' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='000333' ORDER BY DATE DESC
 SELECT * FROM stock_historical_data_qfq ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq WHERE DATE = '2025-09-30';
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq WHERE DATE = '2026-01-27';
 SELECT DISTINCT stock_code FROM stock_historical_data_qfq
 
 DELETE FROM stock_historical_data_qfq WHERE DATE = '2025-07-21';
@@ -396,4 +397,5 @@ CREATE TABLE stock_financial_reports (
 SELECT * FROM stock_financial_reports WHERE stock_code = '600900' ORDER BY report_date DESC
 SELECT COUNT(*) FROM stock_financial_reports WHERE stock_code = '000001' ORDER BY report_date DESC
 SELECT COUNT(DISTINCT(stock_code)) FROM stock_financial_reports
+SELECT * FROM stock_financial_reports WHERE stock_code = '000333' AND report_date <= '2025-12-31' ORDER BY report_date DESC LIMIT 1
 

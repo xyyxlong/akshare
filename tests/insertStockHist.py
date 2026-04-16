@@ -1,4 +1,6 @@
-﻿import akshare as ak
+﻿import random
+
+import akshare as ak
 import pandas as pd
 from tqdm import tqdm
 import time
@@ -71,7 +73,12 @@ class StockHistoricalData:
             except Exception as e:
                 log.error(f"获取{stock_code}历史数据失败(尝试{attempt+1}/{self.MAX_TRYTIMES}): {e}")
                 if attempt < self.MAX_TRYTIMES - 1:
-                    time.sleep(self.AK_TRY_FAILD_SLEEPTIME)
+                    # 在 time.sleep周围添加 try-except
+                    try:
+                        time.sleep(random.uniform(1, self.AK_TRY_FAILD_SLEEPTIME))
+                    except KeyboardInterrupt:
+                        log.error("程序被中断，返回已获取的数据")
+                        continue  # 或 return
                 else:
                     log.error(f"无法获取{stock_code}的历史数据，跳过")
                     return pd.DataFrame()
@@ -148,8 +155,14 @@ class StockHistoricalData:
                 inserted = self.save_to_mysql(df,table_name)
                 total_inserted += inserted
                 
-                # 避免请求过快
-                time.sleep(self.WAITTIME)
+                # 避免请求过快导致被封IP，在每次处理后休眠一段时间
+                # 在 time.sleep周围添加 try-except
+                try:
+                    time.sleep(random.uniform(1, self.WAITTIME))
+                except KeyboardInterrupt:
+                    log.error("程序被中断，返回已获取的数据")
+                    continue  # 或 return
+                
         
         log.info(f"所有股票处理完成，共插入 {total_inserted} 条记录")
 
@@ -196,20 +209,25 @@ if __name__ == "__main__":
     
     # 股票代码列表（示例）
     #stock_codes = pd.DataFrame(data=['600900'],columns=['代码'])
-    # time.sleep(1800)
+ 
+    # 在 time.sleep周围添加 try-except
+    # try:
+    #     time.sleep(1800)
+    # except KeyboardInterrupt:
+    #     log.error("程序被中断，返回已获取的数据")
     
     # 批量处理股票
-    # processor.batch_process_stocks(
-    # stock_codes=stock_codes,
-    # period="daily",
-    # adjust=""
-    # )
-    
     processor.batch_process_stocks(
         stock_codes=stock_codes,
         period="daily",
-        adjust="qfq"
+        adjust=""
     )
+    
+    # processor.batch_process_stocks(
+    #     stock_codes=stock_codes,
+    #     period="daily",
+    #     adjust="qfq"
+    # )
 
 
     

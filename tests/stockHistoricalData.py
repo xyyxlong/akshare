@@ -498,10 +498,10 @@ if __name__ == "__main__":
         processor = StockHistoricalData()
         
         # 可以指定要处理的股票代码列表
-        # stock_codes = ['000333', '000858']
+        stock_codes = ['000333', '000858']
         
         # 或者使用 None 来自动获取自选股列表
-        stock_codes = None
+        # stock_codes = None
         
         # 批量处理股票（不复权数据）
         processor.batch_process_stocks(

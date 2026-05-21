@@ -1,8 +1,3 @@
-
-SHOW STATUS;
-
-
-
 -- 行业历史估值表
 CREATE TABLE `industry_pe_history` (
     `trade_date` DATE NOT NULL COMMENT '交易日',
@@ -13,29 +8,6 @@ CREATE TABLE `industry_pe_history` (
     PRIMARY KEY (`trade_date`, `industry_code`)
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4
 COMMENT='行业历史PE估值表';
-
--- 例子
-INSERT INTO `index_valuation_history` 
-(`index_code`, `index_name`, `trade_date`, `index_value`, 
- `pe_equal_weight_static`, `pe_static`, `pe_static_median`,
- `pe_equal_weight_ttm`, `pe_ttm`, `pe_ttm_median`)
-VALUES 
-('000300', '沪深300', '2023-08-15', 3856.0200, 
- 15.2300, 12.7800, 14.5600,
- 14.8900, 12.3400, 14.1200);
- 
-SELECT * FROM `industry_pe_history` ORDER BY `trade_date` DESC
-SELECT DISTINCT industry_pe_history.`industry_code` FROM industry_pe_history
-SELECT COUNT(*) FROM industry_pe_history
-
-               SELECT 
-                    trade_date,
-                    pe_weighted AS 'PE静-加权',
-                    pe_median AS 'PE静-中位',
-                    pe_mean AS 'PE静-平均'
-                FROM industry_pe_history
-                WHERE industry_code = 'R90'
-                ORDER BY trade_date ASC
 
 
 -- 指数历史估值表
@@ -59,27 +31,6 @@ CREATE TABLE `index_valuation_history` (
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci 
 COMMENT='指数历史估值表';
 
--- 例子
-    INSERT IGNORE INTO `index_valuation_history` 
-    (`index_code`, `index_name`, `trade_date`, `index_value`, 
-    `pe_equal_weight_static`, `pe_static`, `pe_static_median`,
-     `pe_equal_weight_ttm`, `pe_ttm`, `pe_ttm_median`)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-
-SELECT * FROM `index_valuation_history` WHERE `index_name`="沪深300" ORDER BY `trade_date` DESC
-SELECT DISTINCT index_name FROM index_valuation_history
-SELECT COUNT(*) FROM index_valuation_history
-SELECT index_code, index_name, trade_date
-FROM (
-    SELECT 
-        index_code, 
-        index_name, 
-        trade_date,
-        ROW_NUMBER() OVER (PARTITION BY index_code ORDER BY trade_date ASC) AS rn
-    FROM index_valuation_history
-) AS subquery
-WHERE rn = 1;
-
 -- 股票历史估值表
 CREATE TABLE `stock_pe_history` (
   `stock_code` VARCHAR(10) NOT NULL COMMENT '股票代码',
@@ -97,7 +48,6 @@ CREATE TABLE `stock_pe_history` (
   KEY `idx_total_mv` (`total_mv`) COMMENT '市值查询优化[8]'
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci 
 COMMENT='股票历史估值指标表';
-
 -- 数据库预计算
 CREATE MATERIALIZED VIEW pe_stats AS
 SELECT stock_code, 
@@ -105,8 +55,6 @@ SELECT stock_code,
     MIN(pe_ttm) AS min_pe
 FROM stock_pe_history
 GROUP BY stock_code;
-
-
 -- 检查异常值
 ALTER TABLE `stock_pe_history`
 ADD CONSTRAINT `chk_pe` CHECK (`pe` > 0),
@@ -118,54 +66,7 @@ PARTITION BY RANGE (YEAR(trade_date)) (
     PARTITION p2020 VALUES LESS THAN (2021),
     PARTITION p2025 VALUES LESS THAN (2026)
 );
--- 例子
-INSERT INTO `stock_pe_history` 
-(`stock_code`,`stock_name`,`trade_date`, `pe`, `pe_ttm`, `pb`, `dv_ratio`, `dv_ttm`, `ps`, `ps_ttm`, `total_mv`)
-VALUES
-("000333","美的集团",'2015-01-05',23.6896,12.2867,3.3073,2.6774,2.6774,1.0413,0.9241,12596835.71),
-("000333","美的集团",'2015-01-06',25.1404,13.0392,3.5099,2.5229,2.5229,1.105,0.9807,13368328.66);
 
-SELECT COUNT(DISTINCT stock_pe_history.`stock_code`) AS Num_pe FROM stock_pe_history
-SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="002555" ORDER BY `trade_date` DESC 
-SELECT * FROM `stock_pe_history`  WHERE trade_date = '2026-5-20' ORDER BY `trade_date` DESC 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
-SELECT COUNT(DISTINCT stock_pe_history.`stock_code`)  FROM stock_pe_history WHERE trade_date = "20260424" 
-SELECT * FROM stock_pe_history WHERE trade_date = "20250929" 
-SELECT * FROM stock_pe_history WHERE stock_code = "300453" ORDER BY `trade_date` DESC 
-
--- 最近一个月日均股息率(dv_ttm)最高的10支股票
-SELECT 
-    stock_code AS '股票代码',
-    stock_name AS '股票名称',
-    AVG(dv_ttm) AS '日均股息率',
-    COUNT(trade_date) AS '有效交易日数'
-FROM 
-    stock_pe_history
-WHERE 
-    trade_date >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)
-    AND dv_ttm IS NOT NULL
-GROUP BY 
-    stock_code, stock_name
-ORDER BY 
-    AVG(dv_ttm) DESC
-LIMIT 10;
-
-SELECT * FROM stock_pe_history WHERE trade_date ='2025-09-30' AND
-stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
-
-	SELECT trade_date AS `日期`, pe, pe_ttm 
-        FROM stock_pe_history 
-        WHERE stock_code = "002466"
-        ORDER BY trade_date DESC
-
-
-DELETE FROM stock_pe_history
-WHERE trade_date >= '2026-1-1' ;
-
-DELETE FROM stock_pe_history
-WHERE stock_code="600900"  AND trade_date >= '2020-01-01' AND trade_date <= '2020-03-30' AND pe_ttm=NULL;
- 
 -- 分红信息表
 CREATE TABLE dividend_info (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -181,32 +82,6 @@ CREATE TABLE dividend_info (
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY (stock_code, announcement_date)
 ) COMMENT '股票分红信息表';
-
-SELECT * FROM dividend_info WHERE stock_code = '600900' ORDER BY `ex_dividend_date` DESC
-SELECT COUNT(*) FROM dividend_info WHERE stock_code IN ('600900','601919','600596','600598','600618','601336')
-SELECT COUNT(DISTINCT stock_code) FROM dividend_info
-
-                SELECT stock_code, equity_reg_date, cash_dividend, progress
-                FROM dividend_info 
-                WHERE stock_code = '600900' AND cash_dividend > 0 
-                AND progress = '实施'
-                ORDER BY equity_reg_date
-                
-                SELECT cash_dividend, equity_reg_date 
-                FROM dividend_info 
-                WHERE stock_code = '600900' 
-                AND progress = '实施'
-                AND (
-                    (YEAR(equity_reg_date) = '2024' AND MONTH(equity_reg_date) != 1) OR
-                    (YEAR(equity_reg_date) = '2025' AND MONTH(equity_reg_date) = 1)
-                )
-                AND cash_dividend > 0 
-                ORDER BY equity_reg_date DESC
-                LIMIT 1
-                
-SELECT * FROM dividend_info WHERE equity_reg_date = 0000-00-00
-
-
 
 -- 配股信息表
 CREATE TABLE allotment_info (
@@ -224,13 +99,7 @@ CREATE TABLE allotment_info (
     total_funds FLOAT COMMENT '募集资金合计(万元)',
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY (stock_code, announcement_date)
-) COMMENT '股票配股信息表';   
-
-SELECT * FROM allotment_info ORDER BY `allotment_listing` DESC
-SELECT * FROM allotment_info WHERE stock_code = '600900' ORDER BY `allotment_listing` DESC
-SELECT COUNT(*) FROM allotment_info
-SELECT COUNT(DISTINCT stock_code) FROM allotment_info
-SELECT DISTINCT stock_code FROM allotment_info
+) COMMENT '股票配股信息表';
 
 
 -- 股票历史行情数据表
@@ -252,17 +121,8 @@ CREATE TABLE stock_historical_data (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data WHERE stock_code='600900' AND DATE< '2020-03-31' AND DATE> '2020-01-01'  ORDER BY DATE DESC
-SELECT * FROM stock_historical_data WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
 
-SELECT * FROM stock_historical_data WHERE stock_code='000858' ORDER BY DATE DESC
-SELECT COUNT(*) FROM stock_historical_data WHERE DATE = '2026-05-19' 
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2026-01-27' AND stock_code='000963'; 
-SELECT DISTINCT stock_code FROM stock_historical_data
-DELETE FROM stock_historical_data WHERE DATE = '2025-07-21';
-14753282
-
--- 股票历史行情数据表(qfq)
+-- 股票历史行情数据表(前复权)
 CREATE TABLE stock_historical_data_qfq (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增主键',
     DATE DATE NOT NULL COMMENT '日期',
@@ -281,19 +141,7 @@ CREATE TABLE stock_historical_data_qfq (
     UNIQUE KEY idx_stock_date (stock_code, DATE)  -- 确保同一天同一股票只有一条记录
 ) COMMENT '股票历史行情数据表';
 
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='000333' AND DATE>'2010-06-01' 
-SELECT * FROM stock_historical_data_qfq WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='000333' ORDER BY DATE DESC
-SELECT * FROM stock_historical_data_qfq ORDER BY DATE DESC
-SELECT COUNT(*) FROM stock_historical_data_qfq
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq WHERE DATE = '2026-05-19';
-SELECT *  FROM stock_historical_data_qfq WHERE DATE = '2026-04-17';
 
-DELETE FROM stock_historical_data_qfq WHERE DATE = '2025-07-21';
-
-
-
-DROP TABLE stock_financial_reports
 -- 股票财报数据表
 CREATE TABLE stock_financial_reports (
    stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
@@ -395,9 +243,3 @@ CREATE TABLE stock_financial_reports (
     UNIQUE INDEX uniq_stock_report (stock_code, report_date) COMMENT '股票代码+日期唯一索引'
     
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='上市公司财报数据表（含88字段完整版）';
-
-SELECT * FROM stock_financial_reports WHERE stock_code = '600900' ORDER BY report_date DESC
-SELECT COUNT(*) FROM stock_financial_reports WHERE stock_code = '000001' ORDER BY report_date DESC
-SELECT COUNT(DISTINCT(stock_code)) FROM stock_financial_reports WHERE report_date='2026-03-31'
-SELECT * FROM stock_financial_reports WHERE stock_code = '000333' AND report_date <= '2025-12-31' ORDER BY report_date DESC LIMIT 1
-

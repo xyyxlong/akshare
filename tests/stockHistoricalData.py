@@ -86,7 +86,7 @@ class BaostockClient:
             # 默认为上海市场
             return f"sh.{code}"
     
-    def get_history_data(self, stock_code: str, start_date: str, end_date: str, 
+    def     get_history_data(self, stock_code: str, start_date: str, end_date: str, 
                         frequency: str = "d", adjustflag: str = "3") -> Optional[pd.DataFrame]:
         """
         获取历史K线数据
@@ -124,7 +124,7 @@ class BaostockClient:
                 data_list.append(rs.get_row_data())
             
             if not data_list:
-                log.warning(f"⚠️ 股票 {stock_code} 在 {start_date} 到 {end_date} 期间无数据")
+                log.error(f"⚠️ 股票 {stock_code} 在 {start_date} 到 {end_date} 期间无数据")
                 return pd.DataFrame()
             
             df = pd.DataFrame(data_list, columns=rs.fields)
@@ -173,7 +173,7 @@ class StockHistoricalData:
         self.MAX_TRYTIMES = 3
         # 接口调用失败的休眠时间
         self.AK_TRY_FAILD_SLEEPTIME = 60
-        self.WAITTIME = 5  # 请求间隔时间，避免过快请求
+        self.WAITTIME = 1  # 请求间隔时间，避免过快请求
         
         # 初始化 Baostock 客户端
         self.bs_client = BaostockClient()
@@ -232,7 +232,7 @@ class StockHistoricalData:
                     log.info(f"✅ 成功获取 {stock_code} 的 {len(df)} 条数据")
                     return df
                 else:
-                    log.warning(f"⚠️ 股票 {stock_code} 返回数据为空")
+                    log.error(f"⚠️ 股票 {stock_code} 返回数据为空")
                     return pd.DataFrame()
                     
             except Exception as e:
@@ -260,7 +260,7 @@ class StockHistoricalData:
         :return: 插入的行数
         """
         if df.empty:
-            log.warning("⚠️ 无数据可保存")
+            log.error("⚠️ 无数据可保存")
             return 0
         
         # 重命名列（中文 -> 英文）
@@ -475,7 +475,7 @@ def test_baostock_connection():
                 if data_list:
                     log.info(f"✅ 数据获取测试成功，获取到 {len(data_list)} 条记录")
                 else:
-                    log.warning("⚠️ 数据获取测试返回空数据")
+                    log.error("⚠️ 数据获取测试返回空数据")
             else:
                 log.error(f"❌ 数据获取测试失败: {rs.error_msg}")
             
@@ -498,28 +498,28 @@ if __name__ == "__main__":
         processor = StockHistoricalData()
         
         # 可以指定要处理的股票代码列表
-        stock_codes = ['000333', '000858']
+        # stock_codes = ['000333', '000858']
         
         # 或者使用 None 来自动获取自选股列表
-        # stock_codes = None
+        stock_codes = None
         
         # 批量处理股票（不复权数据）
         processor.batch_process_stocks(
             stock_codes=stock_codes,
             period="daily",
             adjust="",  # 不复权
-            start_date="20260101",  # 可选，指定开始日期
+            start_date="20260501",  # 可选，指定开始日期
             end_date=None  # 可选，指定结束日期
         )
         
         # 如果需要前复权数据，取消注释下面的代码
-        # processor.batch_process_stocks(
-        #     stock_codes=stock_codes,
-        #     period="daily",
-        #     adjust="qfq", #前复权
-        #     start_date="20260101",  # 可选，指定开始日期
-        #     end_date=None  # 可选，指定结束日期
-        # )
+        processor.batch_process_stocks(
+            stock_codes=stock_codes,
+            period="daily",
+            adjust="qfq", #前复权
+            start_date="20260501",  # 可选，指定开始日期
+            end_date=None  # 可选，指定结束日期
+        )
         
         # 从数据库查询示例
         # df = get_stock_data_from_mysql("000001", "", "2024-01-01", "2024-12-31")

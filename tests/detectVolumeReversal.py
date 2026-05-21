@@ -317,7 +317,7 @@ def get_stock_industry_pe(stock_code: str) -> pd.DataFrame:
     返回：
         DataFrame ：股票所行业最新交易日的估值信息
     """
-    result = []
+    result = pd.DataFrame()
     # 获取行业信息
     industry = gi.get_industry_info(stock_code)
 
@@ -610,12 +610,11 @@ def save_to_excel_filter(result: list, stock_list: pd.DataFrame, filename: str) 
                     last_row.get('vg_mask', False)
                     ]):
             
-                #查询检测通过股票的行业PE
-                df_industry = []
+                # 查询检测通过股票的行业PE
                 df_industry = get_stock_industry_pe(code)
-            
-                # 先检查 df_industry 是否为 None
-                if df_industry is not None and not df_industry.empty:
+
+                # 先检查 df_industry 是否为 DataFrame 且不为空
+                if isinstance(df_industry, pd.DataFrame) and not df_industry.empty:
                     last_index = df_industry.index[-1]  # 获取最后一行索引
                     industry_id = df_industry.loc[last_index, "行业编码"]
                     industry_name = df_industry.loc[last_index, "行业"]
@@ -792,18 +791,18 @@ if __name__ == "__main__":
     #是否检测自选True/False
     ISMY_SELECT = True
     #是否对所有检测标的输出结果True/False
-    ISALL = True
+    ISALL = False
 
     PE_ROLLING_TIME = 5 #滚动PE百分位时间配置，默认5年
     PE_PERCENTILE = 5 #滚动PE百分位阈值配置，默认5%
 
     #检测自选股买点，只展现有买点可能性的标的
-    # detect_with_lastPE(my_select)
+    detect_with_lastPE(my_select)
 
     
     #检测自选股买点，呈现所有自选股的数据
     ALL_PE_DOC_NUM = 1 #当输出ALLPEexcel文档时，分割为几个文档输出
-    detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
+    # detect_with_allPE(my_select)#通过PE来判断，主要用于成长股。
 
     #直接生成买点订单（回测使用）
     #IS_BUY = True

@@ -239,7 +239,7 @@ if __name__ == "__main__":
     # year_window = 5 # 回测时间窗口为5年
     # pename = 'pe_ttm' #pe_static/pe_ttm/pe_static_median/pe_ttm_median/pe_equal_weight_static/pe_equal_weight_ttm
     
-    # percent = '{:.2f}'.format(get_pe_percentile(df, "20251210",pename, year_window))
+    # percent = '{:.2f}'.format(get_pe_percentile(df, "20260507",pename, year_window))
     # print(df.iloc[-1])
     # print(f"{pename} {year_window} year percent: {percent}%")
     

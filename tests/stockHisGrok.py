@@ -36,8 +36,8 @@ REVERSE_COLUMN_MAP = {v: k for k, v in COLUMN_MAP.items()}
 class StockHistoricalDataGroker:
     def __init__(self):
         self.MAX_TRYTIMES = 3
-        self.BS_TRY_FAILD_SLEEPTIME = 10
-        self.WAITTIME = 10  # 请求间隔，避免被限流
+        self.BS_TRY_FAILD_SLEEPTIME = 60
+        self.WAITTIME = 5  # 请求间隔，避免被限流
 
         # 登录 Baostock（只需一次）
         lg = bs.login()
@@ -276,19 +276,19 @@ if __name__ == "__main__":
     # 可以指定要处理的股票代码列表
     stock_codes = ['000333', '000858']
     # 使用 get_select_stocks() 获取自选股票列表
-    # stock_codes = None 
+    stock_codes = None 
     
     start_date= "20260101"
-    end_date= "20260416"
+    end_date= "20260424"
 
     # 示例：处理自选股票（不复权）
-    processor.batch_process_stocks(
-        stock_codes=stock_codes,   # None 表示使用 get_select_stocks()
-        period="daily",
-        adjust="",        # ""=不复权, "qfq"=前复权
-        start_date=start_date,
-        end_date=end_date
-    )
+    # processor.batch_process_stocks(
+    #     stock_codes=stock_codes,   # None 表示使用 get_select_stocks()
+    #     period="daily",
+    #     adjust="",        # ""=不复权, "qfq"=前复权
+    #     start_date=start_date,
+    #     end_date=end_date
+    # )
 
     # 处理前复权示例
     # processor.batch_process_stocks(..., adjust="qfq")

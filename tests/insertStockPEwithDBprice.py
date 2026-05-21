@@ -133,6 +133,7 @@ class StockValuationCalculator:
                 df = pd.DataFrame(result)
                 df['equity_reg_date'] = pd.to_datetime(df['equity_reg_date'])
                 
+                df['cash_dividend'] = df['cash_dividend'].astype(float)
                 # 计算每股分红（将每10股分红转换为每股分红）
                 df['dividend_per_share'] = df['cash_dividend'] / 10.0
                 
@@ -260,6 +261,9 @@ class StockValuationCalculator:
                 cursor.execute(sql, (stock_code, as_of_date))
                 result = cursor.fetchone()
                 return result
+        except KeyboardInterrupt:
+            log.error("程序被中断，返回已获取的数据")
+            return pd.DataFrame()
         except Exception as e:
             log.error(f"获取股票 {stock_code} 最新季报数据失败: {e}")
             return None
@@ -829,8 +833,8 @@ def main():
     所以在该时间点之后的PE等估值指标会和以前的有断层。    
     未来可以考虑从数据库中获取历史数据，减少对akshare的依赖
     """
-    start_date = '2025-12-31'
-    end_date = '2026-4-15'
+    start_date = '2026-5-20'
+    end_date = '2026-5-20'
     
     # 创建估值计算器
     calculator = StockValuationCalculator(DB_CONFIG)

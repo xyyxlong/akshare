@@ -240,7 +240,7 @@ def save_to_excel(data: Union[List[Tuple[str, pd.DataFrame]], List[Dict], pd.Dat
                  num_chunks: int = 1):
     """Unified save to excel function"""
     if not data:
-        log.warning("No data to save.")
+        log.error("No data to save.")
         return
 
     # Ensure parent directory exists
@@ -283,7 +283,7 @@ def run_pipeline(mode: str, select_file: Path):
         n_years=5,
         start_date="20160701",
         is_mysql=True,
-        is_my_select=True,
+        is_my_select=False,
         is_all=False,
         pe_rolling_time=5,
         pe_percentile=5

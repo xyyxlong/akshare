@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import log4ak
-from getAllStock import get_select_stocks
+from getAllStock import get_select_stocks,get_all_stocks
 
 base_path = Path(__file__).parent
 log = log4ak.LogManager(log_level=log4ak.INFO)
@@ -27,9 +27,10 @@ class VectorizedValuationCalculator:
     基于 Pandas 向量化计算的重构版估值计算器
     解决了原版严重的 N+1 数据库查询问题，性能提升数个数量级。
     """
-    def __init__(self, db_config: Dict):
+    def __init__(self, db_config: Dict, isall: bool = True):
         self.db_config = db_config
         self.connection = None
+        self.isall = isall  # 是否处理全市场股票
 
     def connect(self):
         """建立或确保数据库连接活跃"""
@@ -175,7 +176,7 @@ class VectorizedValuationCalculator:
         # 1. 拉取交易日历与价格
         price_df = self.get_historical_price_data(stock_code, start_date, end_date)
         if price_df.empty:
-            log.warning(f"[{stock_code}] {stock_name} 无价格数据。")
+            log.error(f"[{stock_code}] {stock_name} 无价格数据。")
             return pd.DataFrame()
 
         # 2. 拉取财报（多取3年以确保有上年/上上年数据用于TTM计算）
@@ -305,12 +306,20 @@ class VectorizedValuationCalculator:
             log.error(f"❌ 批量保存失败: {e}")
 
 def run_valuation_job():
-    start_date = '2025-12-31'
-    end_date = '2026-05-20'
+    start_date = '2025-07-09'
+    end_date = '2026-05-26'
+    isall = True  # 是否处理全市场股票
     
-    calculator = VectorizedValuationCalculator(DB_CONFIG)
+    calculator = VectorizedValuationCalculator(DB_CONFIG, isall=isall)
+    
     try:
-        select_df = get_select_stocks()
+        if calculator.isall:
+            log.info("📊 获取全市场股票列表...")
+            select_df = get_all_stocks()
+        else:
+            log.info("📊 获取选定股票列表...")
+            select_df = get_select_stocks()
+            
         if select_df is None or select_df.empty:
             log.error("未获取到自选股票列表，退出。")
             return

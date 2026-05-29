@@ -405,7 +405,7 @@ if __name__ == "__main__":
 
     #查询所有股票PE并入库
     
-    df = insertStockReport("")#all
+    df = insertStockReport("all")#all
 
     #df = get_stockfin_data_from_mysql('600036')
     #print(df)

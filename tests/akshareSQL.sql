@@ -127,10 +127,10 @@ VALUES
 
 SELECT COUNT(DISTINCT stock_pe_history.`stock_code`) AS Num_pe FROM stock_pe_history
 SELECT pe FROM `stock_pe_history`  ORDER BY `trade_date` 
-SELECT * FROM `stock_pe_history`  WHERE stock_code="002555" ORDER BY `trade_date` DESC 
+SELECT * FROM `stock_pe_history`  WHERE stock_code="000858" ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE trade_date = '2026-5-20' ORDER BY `trade_date` DESC 
 SELECT * FROM `stock_pe_history`  WHERE stock_code="603198" ORDER BY `pe_ttm`
-SELECT COUNT(DISTINCT stock_pe_history.`stock_code`)  FROM stock_pe_history WHERE trade_date = "20260424" 
+SELECT COUNT(DISTINCT stock_pe_history.`stock_code`)  FROM stock_pe_history WHERE trade_date = "20260526" 
 SELECT * FROM stock_pe_history WHERE trade_date = "20250929" 
 SELECT * FROM stock_pe_history WHERE stock_code = "300453" ORDER BY `trade_date` DESC 
 
@@ -255,8 +255,8 @@ CREATE TABLE stock_historical_data (
 SELECT * FROM stock_historical_data WHERE stock_code='600900' AND DATE< '2020-03-31' AND DATE> '2020-01-01'  ORDER BY DATE DESC
 SELECT * FROM stock_historical_data WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
 
-SELECT * FROM stock_historical_data WHERE stock_code='000858' ORDER BY DATE DESC
-SELECT COUNT(*) FROM stock_historical_data WHERE DATE = '2026-05-19' 
+SELECT * FROM stock_historical_data WHERE stock_code='300390' ORDER BY DATE DESC
+SELECT COUNT(*) FROM stock_historical_data WHERE DATE = '2026-05-27' 
 SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data WHERE DATE = '2026-01-27' AND stock_code='000963'; 
 SELECT DISTINCT stock_code FROM stock_historical_data
 DELETE FROM stock_historical_data WHERE DATE = '2025-07-21';
@@ -283,10 +283,10 @@ CREATE TABLE stock_historical_data_qfq (
 
 SELECT * FROM stock_historical_data_qfq WHERE stock_code='000333' AND DATE>'2010-06-01' 
 SELECT * FROM stock_historical_data_qfq WHERE DATE='2025-09-30' AND stock_code IN ("600900","000858","601919","000333","002555","002602","002460","002738","600036","601088","002466")
-SELECT * FROM stock_historical_data_qfq WHERE stock_code='000333' ORDER BY DATE DESC
+SELECT * FROM stock_historical_data_qfq WHERE stock_code='603666' ORDER BY DATE DESC
 SELECT * FROM stock_historical_data_qfq ORDER BY DATE DESC
 SELECT COUNT(*) FROM stock_historical_data_qfq
-SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq WHERE DATE = '2026-05-19';
+SELECT COUNT(DISTINCT stock_code) FROM stock_historical_data_qfq WHERE DATE = '2026-5-26';
 SELECT *  FROM stock_historical_data_qfq WHERE DATE = '2026-04-17';
 
 DELETE FROM stock_historical_data_qfq WHERE DATE = '2025-07-21';
@@ -396,8 +396,9 @@ CREATE TABLE stock_financial_reports (
     
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='上市公司财报数据表（含88字段完整版）';
 
-SELECT * FROM stock_financial_reports WHERE stock_code = '600900' ORDER BY report_date DESC
+SELECT * FROM stock_financial_reports WHERE stock_code = '000858' ORDER BY report_date DESC
 SELECT COUNT(*) FROM stock_financial_reports WHERE stock_code = '000001' ORDER BY report_date DESC
-SELECT COUNT(DISTINCT(stock_code)) FROM stock_financial_reports WHERE report_date='2026-03-31'
+SELECT COUNT(DISTINCT(stock_code)) FROM stock_financial_reports WHERE report_date='2026-03-31' 
+SELECT * FROM stock_financial_reports WHERE report_date='2026-03-31' AND (stock_code = '605507' OR stock_code = '000333')
 SELECT * FROM stock_financial_reports WHERE stock_code = '000333' AND report_date <= '2025-12-31' ORDER BY report_date DESC LIMIT 1
 

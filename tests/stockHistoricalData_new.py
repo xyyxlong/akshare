@@ -9,7 +9,7 @@ from tqdm import tqdm
 import baostock as bs
 
 import insert2Mysql as i2m
-from getAllStock import get_select_stocks
+from getAllStock import get_select_stocks, get_all_stocks
 import log4ak
 
 # 日志配置
@@ -149,8 +149,9 @@ class StockHistoricalData:
     def __init__(self):
         self.MAX_TRYTIMES = 3
         self.AK_TRY_FAILD_SLEEPTIME = 60
-        self.WAITTIME = 1
+        self.WAITTIME = 3
         self.bs_client = BaostockClient()
+        self.isall = False
         
     def fetch_stock_data(self, stock_code: str, period: str = "daily", 
                          adjust: str = "", start_date: str = None, 
@@ -234,7 +235,12 @@ class StockHistoricalData:
         Optimized: Fetches both normal and qfq data in a single stock loop to reduce context switching and duplicate loop overhead.
         """
         if stock_codes is None:
-            select_df = get_select_stocks()
+            if self.isall:
+                log.info("📊 获取全市场股票列表...")
+                select_df = get_all_stocks()
+            else:
+                log.info("📊 获取选定股票列表...")
+                select_df = get_select_stocks()
             if select_df is None or select_df.empty:
                 log.error("❌ 无法获取股票列表")
                 return
@@ -303,14 +309,15 @@ if __name__ == "__main__":
     if test_baostock_connection():
         log.info("🚀 开始执行主程序...")
         processor = StockHistoricalData()
+        processor.isall = False  # 设置为False以获取选定股票列表
         
         # 优化后：在一次遍历中同时拉取并存储不复权和前复权数据
         processor.batch_process_stocks(
             stock_codes=None,
             period="daily",
-            start_date="20260501",
+            start_date="20250509",
             end_date=None,
-            fetch_qfq=True
+            fetch_qfq=True  # 设置为 True 以同时获取前复权数据
         )
     else:
         log.error("❌ Baostock 连接测试失败，程序退出")

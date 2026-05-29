@@ -14,6 +14,7 @@ from getAllStock import get_all_stocks, get_select_stocks, ipodatefilter_stocks
 import insertSelectStockPE as issp
 import insert2Mysql as ins
 import get_stockPE_his as gsh
+import insertStockReport_new as iSR
 
 # 日志配置
 log = log4ak.LogManager(log_level=log4ak.INFO)
@@ -21,14 +22,15 @@ log = log4ak.LogManager(log_level=log4ak.INFO)
 @dataclass
 class SelectStockConfig:
     """选股配置类，替代全局变量"""
-    is_my: bool = True               # 是否选取自选配置 False/True
+    is_my: bool = False               # 是否选取自选配置 False/True
     is_mysql: bool = True            # PE数据来源，True=数据库, False=Akshare
-    chunk_num: int = 1               # 全市场数据分块处理数量
+    chunk_num: int = 10              # 全市场数据分块处理数量
     start_year: str = "2019"         # 计算的起始年份
     roe_min: float = 15.0            # ROE最低要求 (%)
-    pe_max: float = 25.0             # PE最大要求
-    past_day: int = 30               # 获取PE数据的过去天数
+    pe_max: float = 20.0             # PE最大要求
+    past_day: int = 60               # 获取PE数据的过去天数
     past_year: int = 5               # 获取财务数据的过去年数
+    interval: int = 0                # 每只股票处理完成后的休眠时间(秒)
     max_consecutive_errors: int = 3  # 最大允许连续错误次数
     out_time: int = 10               # 接口长时间无返回报错(秒)
     reconnect_time: int = 30         # 断线重连休眠时间(秒)
@@ -66,29 +68,45 @@ class StockSelector:
     def check_roe_cash_ebit(self, stock_code: str) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]:
         """
         获取核心财务指标：ROE, 现金利润比, 净利增长率, 资产负债率, 应收账款周转天数
+        数据源优先级：本地数据库 (若 IS_MYSQL=True) -> AkShare 接口
         """
         df = None
-        for attempt in range(self.config.max_consecutive_errors):
+        
+        # 1. 尝试从本地数据库获取
+        if self.config.is_mysql:
             try:
-                log.info(f"[{stock_code}] 获取 {self.config.start_year} 至今财报数据")
-                df = run_with_timeout(
-                    ak.stock_financial_analysis_indicator, 
-                    self.config.out_time, 
-                    symbol=stock_code, 
-                    start_year=self.config.start_year
-                )
+                log.info(f"[{stock_code}] 尝试从本地数据库获取财报数据")
+                df = iSR.get_stockfin_data_from_mysql(stock_code)
                 if df is not None and not df.empty:
-                    break
-            except TimeoutError:
-                log.error(f"[{stock_code}] 财报接口调用超时 (尝试 {attempt+1}/{self.config.max_consecutive_errors})")
+                    log.info(f"[{stock_code}] 成功从本地数据库加载财报数据")
+                else:
+                    log.error(f"[{stock_code}] 数据库财报数据为空，准备通过网络回源")
             except Exception as e:
-                log.error(f"[{stock_code}] 财报接口调用失败: {e} (尝试 {attempt+1}/{self.config.max_consecutive_errors})")
-            
-            if attempt < self.config.max_consecutive_errors - 1:
-                time.sleep(self.config.reconnect_time)
-            else:
-                log.error(f"[{stock_code}] 无法获取财报数据，跳过")
-                return None, None, None, None, None
+                log.error(f"[{stock_code}] 读取本地数据库财报失败: {e}")
+
+        # 2. 如果数据库无数据，从 AkShare 获取
+        if df is None or df.empty:
+            for attempt in range(self.config.max_consecutive_errors):
+                try:
+                    log.info(f"[{stock_code}] 获取 {self.config.start_year} 至今网络财报数据")
+                    df = run_with_timeout(
+                        ak.stock_financial_analysis_indicator, 
+                        self.config.out_time, 
+                        symbol=stock_code, 
+                        start_year=self.config.start_year
+                    )
+                    if df is not None and not df.empty:
+                        break
+                except TimeoutError:
+                    log.error(f"[{stock_code}] 财报接口调用超时 (尝试 {attempt+1}/{self.config.max_consecutive_errors})")
+                except Exception as e:
+                    log.error(f"[{stock_code}] 财报接口调用失败: {e} (尝试 {attempt+1}/{self.config.max_consecutive_errors})")
+                
+                if attempt < self.config.max_consecutive_errors - 1:
+                    time.sleep(self.config.reconnect_time)
+                else:
+                    log.error(f"[{stock_code}] 无法获取网络财报数据，跳过")
+                    return None, None, None, None, None
         
         if df is None or df.empty:
             return None, None, None, None, None
@@ -100,16 +118,20 @@ class StockSelector:
         }).copy()
         
         # 提取12月31日的年报
-        clean_df['日期'] = pd.to_datetime(clean_df['日期'], errors='coerce')
+        clean_df['日期'] = pd.to_datetime(clean_df.get('日期') if '日期' in clean_df else clean_df.get('report_date'), errors='coerce')
         year_end_mask = (clean_df['日期'].dt.month == 12) & (clean_df['日期'].dt.day == 31)
         clean_df = clean_df[year_end_mask].sort_values('日期', ascending=False)
         
-        # 数值转换
-        numeric_cols = [
-            '净资产收益率(%)', 'debt_ratio', 'receivable_days', 
-            '每股经营性现金流(元)', '扣除非经常性损益后的每股收益(元)', 
-            '扣除非经常性损益后的净利润(元)'
-        ]
+        # 数值转换 (兼容中文列名和可能的英文列名，依据不同数据源)
+        roe_col = '净资产收益率(%)' if '净资产收益率(%)' in clean_df else 'roe'
+        cash_flow_col = '每股经营性现金流(元)' if '每股经营性现金流(元)' in clean_df else 'operating_cash_flow_per_share'
+        eps_col = '扣除非经常性损益后的每股收益(元)' if '扣除非经常性损益后的每股收益(元)' in clean_df else 'non_gaap_eps'
+        profit_col = '扣除非经常性损益后的净利润(元)' if '扣除非经常性损益后的净利润(元)' in clean_df else 'non_gaap_net_profit'
+        debt_col = 'debt_ratio' if 'debt_ratio' in clean_df else 'asset_liability_ratio'
+        receivable_col = 'receivable_days' if 'receivable_days' in clean_df else 'receivables_days'
+
+        numeric_cols = [roe_col, debt_col, receivable_col, cash_flow_col, eps_col, profit_col]
+        
         for col in numeric_cols:
             if col in clean_df.columns:
                 clean_df[col] = pd.to_numeric(clean_df[col].replace('--', np.nan), errors='coerce')
@@ -118,16 +140,16 @@ class StockSelector:
             return None, None, None, None, None
 
         # 1. 平均ROE (过去 N 年)
-        roe_values = clean_df['净资产收益率(%)'].head(self.config.past_year).dropna()
+        roe_values = clean_df[roe_col].head(self.config.past_year).dropna() if roe_col in clean_df else pd.Series(dtype=float)
         var1 = roe_values.mean() if not roe_values.empty else None
         
         # 2. 经营现金流/扣非净利润 比率
-        cash_flow_mean = clean_df['每股经营性现金流(元)'].head(self.config.past_year).fillna(0).mean()
-        profit_mean = clean_df['扣除非经常性损益后的每股收益(元)'].head(self.config.past_year).fillna(0).mean()
+        cash_flow_mean = clean_df[cash_flow_col].head(self.config.past_year).fillna(0).mean() if cash_flow_col in clean_df else None
+        profit_mean = clean_df[eps_col].head(self.config.past_year).fillna(0).mean() if eps_col in clean_df else None
         var2 = safe_divide(cash_flow_mean, profit_mean)
         
         # 3. 最新扣非净利润 / 前 N 年平均扣非净利润
-        profit_series = clean_df['扣除非经常性损益后的净利润(元)'].dropna()
+        profit_series = clean_df[profit_col].dropna() if profit_col in clean_df else pd.Series(dtype=float)
         var3 = None
         if len(profit_series) >= 2:
             latest_profit = profit_series.iloc[0]
@@ -135,11 +157,11 @@ class StockSelector:
             var3 = safe_divide(latest_profit, historical_avg_profit)
         
         # 4. 资产负债率均值
-        debt_ratios = clean_df['debt_ratio'].head(self.config.past_year).dropna()
+        debt_ratios = clean_df[debt_col].head(self.config.past_year).dropna() if debt_col in clean_df else pd.Series(dtype=float)
         var4 = debt_ratios.mean() if not debt_ratios.empty else None
         
         # 5. 应收账款周转天数均值
-        receivable_values = clean_df['receivable_days'].head(self.config.past_year).dropna()
+        receivable_values = clean_df[receivable_col].head(self.config.past_year).dropna() if receivable_col in clean_df else pd.Series(dtype=float)
         var5 = receivable_values.mean() if not receivable_values.empty else None
         
         log.debug(f"[{stock_code}] 指标: ROE={var1}, 现金流比={var2}, 净利增长={var3}, 负债率={var4}, 周转天数={var5}")
@@ -270,7 +292,7 @@ class StockSelector:
                     })
                     
                     error_count = 0  # 成功后重置错误计数
-                    time.sleep(2)    # 防封禁强制休眠
+                    time.sleep(self.config.interval)    # 防封禁强制休眠
                     
                 except Exception as e:
                     error_count += 1

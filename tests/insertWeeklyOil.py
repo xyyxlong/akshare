@@ -66,6 +66,7 @@ import pymysql
 from pymysql import MySQLError
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple, Dict
+from pathlib import Path
 import time
 import random
 import requests
@@ -102,7 +103,7 @@ DB_CONFIG = {
 
 # EIA API 配置
 # 注意: 需要在 EIA 官网注册获取 API Key: https://www.eia.gov/opendata/
-EIA_API_KEY = "YOUR_EIA_API_KEY"  # 请替换为实际的 API Key
+EIA_API_KEY = "pSdYzPJK5y0yrGZ1XSqNPfS6WFtzvCE2K7s7wc4Z"  # 请替换为实际的 API Key
 EIA_BASE_URL = "https://api.eia.gov/v2"
 
 # EIA 数据序列映射
@@ -263,36 +264,358 @@ def fetch_cftc_data(start_date: str, end_date: str) -> pd.DataFrame:
     """
     获取 CFTC 持仓数据
     
-    注意: CFTC 数据需要从官网下载 CSV 或使用第三方数据源
-    此处提供模拟实现，实际生产中需要替换为真实数据源
+    优先从本地 CSV 文件读取，若无则调用 downloadCFTC 模块下载
+    
+    文件路径: ../input/CFTC/CFTC_<start_date>_<end_date>.csv
+    
+    Args:
+        start_date: 开始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+    
+    Returns:
+        DataFrame 包含 report_date, cftc_net_long 列
     """
     log.info(f"正在获取 CFTC 持仓数据: {start_date} ~ {end_date}")
     
-    # TODO: 实现真实的 CFTC 数据获取逻辑
-    # 可选方案:
-    # 1. 爬取 CFTC 官网 CSV: https://www.cftc.gov/MarketReports/CommitmentsofTraders/
-    # 2. 使用 quandl/nasdaq 等第三方 API
-    # 3. 从本地 CSV 文件读取
+    # CFTC 数据目录
+    cftc_dir = Path(__file__).parent.parent / "input" / "CFTC"
     
-    # 返回空 DataFrame，由调用方处理
-    log.info("⚠️ CFTC 数据源未配置，返回空数据 (请配置真实数据源)")
+    # 1. 精确匹配: CFTC_<start_date>_<end_date>.csv
+    exact_file = cftc_dir / f"CFTC_{start_date}_{end_date}.csv"
+    if exact_file.exists():
+        log.info(f"✅ 找到精确匹配的 CFTC 文件: {exact_file.name}")
+        return _parse_cftc_csv(exact_file, start_date, end_date)
+    
+    # 2. 查找覆盖范围的文件
+    if cftc_dir.exists():
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        
+        for f in cftc_dir.glob("CFTC_*_*.csv"):
+            try:
+                # 解析文件名: CFTC_YYYY-MM-DD_YYYY-MM-DD.csv
+                parts = f.stem.replace('CFTC_', '').split('_')
+                if len(parts) == 6:
+                    file_start = f"{parts[0]}-{parts[1]}-{parts[2]}"
+                    file_end = f"{parts[3]}-{parts[4]}-{parts[5]}"
+                    file_start_dt = datetime.strptime(file_start, '%Y-%m-%d')
+                    file_end_dt = datetime.strptime(file_end, '%Y-%m-%d')
+                    
+                    # 检查是否覆盖请求范围
+                    if file_start_dt <= start_dt and file_end_dt >= end_dt:
+                        log.info(f"✅ 找到覆盖范围的 CFTC 文件: {f.name}")
+                        return _parse_cftc_csv(f, start_date, end_date)
+            except (ValueError, IndexError):
+                continue
+    
+    # 3. 本地无文件，尝试调用 downloadCFTC 模块
+    log.info("本地无 CFTC 缓存文件，尝试调用 downloadCFTC 模块...")
+    try:
+        from downloadCFTC import get_cftc_net_long
+        df = get_cftc_net_long(start_date, end_date)
+        if not df.empty:
+            log.info(f"✅ 通过 downloadCFTC 获取 {len(df)} 条 CFTC 记录")
+            return df
+    except ImportError:
+        log.info("⚠️ downloadCFTC 模块不可用")
+    except Exception as e:
+        log.error(f"❌ 调用 downloadCFTC 失败: {e}")
+    
+    log.info("⚠️ CFTC 数据获取失败，返回空数据")
     return pd.DataFrame(columns=['report_date', 'cftc_net_long'])
+
+
+def _parse_cftc_csv(filepath: Path, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    解析 CFTC CSV 文件并提取需要的列
+    
+    计算逻辑:
+    - cftc_net_long = M_MONEY_POSITIONS_LONG_ALL - M_MONEY_POSITIONS_SHORT_ALL
+    - 或者使用 PROD_MERC (生产商/贸易商) 数据
+    
+    Args:
+        filepath: CSV 文件路径
+        start_date: 开始日期 (用于过滤)
+        end_date: 结束日期 (用于过滤)
+    
+    Returns:
+        DataFrame 包含 report_date, cftc_net_long 列
+    """
+    try:
+        df = pd.read_csv(filepath)
+        
+        # 统一列名为大写
+        df.columns = df.columns.str.strip().str.upper()
+        
+        # 查找日期列 (可能是 REPORT_DATE_AS_YYYY-MM-DD 或 REPORT_DATE)
+        date_col = None
+        for col in df.columns:
+            if 'REPORT_DATE' in col:
+                date_col = col
+                break
+        
+        if date_col is None:
+            log.error(f"❌ CFTC CSV 中未找到日期列")
+            return pd.DataFrame(columns=['report_date', 'cftc_net_long'])
+        
+        # 转换日期
+        df[date_col] = pd.to_datetime(df[date_col])
+        
+        # 过滤日期范围
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)].copy()
+        
+        if df.empty:
+            log.info(f"⚠️ CFTC 文件中日期范围 {start_date} ~ {end_date} 内无数据")
+            return pd.DataFrame(columns=['report_date', 'cftc_net_long'])
+        
+        # 重新计算 cftc_net_long (使用 Money Manager 数据)
+        long_col = None
+        short_col = None
+        
+        # 优先使用 Money Manager (基金经理) 数据，精确匹配 _ALL 后缀
+        for col in df.columns:
+            if col == 'M_MONEY_POSITIONS_LONG_ALL':
+                long_col = col
+            elif col == 'M_MONEY_POSITIONS_SHORT_ALL':
+                short_col = col
+        
+        # 如果没找到 Money Manager，使用 Prod_Merc (生产商/贸易商)
+        if long_col is None or short_col is None:
+            for col in df.columns:
+                if col == 'PROD_MERC_POSITIONS_LONG_ALL':
+                    long_col = col
+                elif col == 'PROD_MERC_POSITIONS_SHORT_ALL':
+                    short_col = col
+        
+        if long_col and short_col:
+            df['CFTC_NET_LONG_CALC'] = (
+                pd.to_numeric(df[long_col], errors='coerce') - 
+                pd.to_numeric(df[short_col], errors='coerce')
+            )
+            log.info(f"  使用 {long_col} - {short_col} 计算净多头")
+        else:
+            # 使用文件中已有的 CFTC_NET_LONG 列
+            df['CFTC_NET_LONG_CALC'] = df.get('CFTC_NET_LONG', None)
+        
+        # 按日期分组，选择净多头绝对值最大的记录 (排除掉值为0的无效行)
+        # 因为同一日期可能有多个合约类型 (WTI期货 vs 期权等)
+        records = []
+        for dt, group in df.groupby(date_col):
+            valid = group[group['CFTC_NET_LONG_CALC'].notna() & (group['CFTC_NET_LONG_CALC'] != 0)]
+            if valid.empty:
+                records.append({'report_date': dt, 'cftc_net_long': 0.0})
+            else:
+                # 选择绝对值最大的那条
+                best_idx = valid['CFTC_NET_LONG_CALC'].abs().idxmax()
+                records.append({
+                    'report_date': dt,
+                    'cftc_net_long': valid.loc[best_idx, 'CFTC_NET_LONG_CALC']
+                })
+        
+        result = pd.DataFrame(records)
+        result['report_date'] = pd.to_datetime(result['report_date']).dt.strftime('%Y-%m-%d')
+        result['cftc_net_long'] = pd.to_numeric(result['cftc_net_long'], errors='coerce')
+        
+        # 按日期排序
+        result.sort_values('report_date', inplace=True)
+        result.reset_index(drop=True, inplace=True)
+        
+        log.info(f"✅ 从 CFTC CSV 解析 {len(result)} 条记录")
+        
+        return result
+        
+    except Exception as e:
+        log.error(f"❌ 解析 CFTC CSV 失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame(columns=['report_date', 'cftc_net_long'])
 
 
 def fetch_baker_hughes_data(start_date: str, end_date: str) -> pd.DataFrame:
     """
     获取 Baker Hughes 活跃钻井数数据
     
-    注意: Baker Hughes 数据需要从官网下载 Excel
-    此处提供模拟实现，实际生产中需要替换为真实数据源
+    从本地 ../input/BakerHughes/ 目录下的 Excel 文件解析:
+    - .xlsx (新报告): NAM Weekly sheet, 按 Country=UNITED STATES + DrillFor=Oil 汇总
+    - .xlsb (历史归档): US Oil & Gas Split sheet, 直接读取 Date + Oil 列
+    
+    Args:
+        start_date: 开始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+    
+    Returns:
+        DataFrame 包含 report_date, baker_hughes_rig_count 列
     """
     log.info(f"正在获取 Baker Hughes 钻井数据: {start_date} ~ {end_date}")
     
-    # TODO: 实现真实的 Baker Hughes 数据获取逻辑
-    # 数据源: https://rigcount.bakerhughes.com/
+    bh_dir = Path(__file__).parent.parent / "input" / "BakerHughes"
     
-    log.info("⚠️ Baker Hughes 数据源未配置，返回空数据 (请配置真实数据源)")
-    return pd.DataFrame(columns=['report_date', 'baker_hughes_rig_count'])
+    if not bh_dir.exists():
+        log.info("Baker Hughes 数据目录不存在")
+        return pd.DataFrame(columns=['report_date', 'baker_hughes_rig_count'])
+    
+    all_dfs = []
+    
+    # 1. 解析所有 .xlsx 文件 (新报告格式)
+    for f in sorted(bh_dir.glob("*.xlsx")):
+        df = _parse_bh_xlsx(f)
+        if not df.empty:
+            all_dfs.append(df)
+    
+    # 2. 解析所有 .xlsb 文件 (历史归档格式)
+    for f in sorted(bh_dir.glob("*.xlsb")):
+        df = _parse_bh_xlsb(f)
+        if not df.empty:
+            all_dfs.append(df)
+    
+    if not all_dfs:
+        log.info("未找到可解析的 Baker Hughes 文件")
+        return pd.DataFrame(columns=['report_date', 'baker_hughes_rig_count'])
+    
+    # 3. 合并、去重、排序
+    combined = pd.concat(all_dfs, ignore_index=True)
+    combined.drop_duplicates(subset=['report_date'], keep='last', inplace=True)
+    combined.sort_values('report_date', inplace=True)
+    combined.reset_index(drop=True, inplace=True)
+    
+    # 4. 过滤日期范围
+    combined['_dt'] = pd.to_datetime(combined['report_date'])
+    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+    end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+    filtered = combined[(combined['_dt'] >= start_dt) & (combined['_dt'] <= end_dt)].copy()
+    filtered.drop(columns=['_dt'], inplace=True)
+    filtered.reset_index(drop=True, inplace=True)
+    
+    log.info(f"Baker Hughes 数据: 合并 {len(combined)} 条, 过滤后 {len(filtered)} 条")
+    
+    return filtered
+
+
+def _parse_bh_xlsx(filepath: Path) -> pd.DataFrame:
+    """
+    解析 Baker Hughes .xlsx 新报告文件
+    
+    结构: NAM Weekly sheet
+    - header row 10: Country, County, Basin, GOM, DrillFor, Location,
+                     State/Province, Trajectory, Year, Month, US_PublishDate, Rig Count Value
+    - 过滤: Country=UNITED STATES, DrillFor=Oil
+    - 按 US_PublishDate 汇总 Rig Count Value
+    """
+    try:
+        log.info(f"  解析 xlsx: {filepath.name}")
+        df = pd.read_excel(filepath, sheet_name='NAM Weekly', header=10, engine='openpyxl')
+        
+        # 校验必要列
+        required = ['Country', 'DrillFor', 'US_PublishDate', 'Rig Count Value']
+        for col in required:
+            if col not in df.columns:
+                log.info(f"    缺少列 {col}, 跳过")
+                return pd.DataFrame()
+        
+        # 过滤: 美国 + 石油
+        us_oil = df[(df['Country'] == 'UNITED STATES') & (df['DrillFor'] == 'Oil')].copy()
+        
+        if us_oil.empty:
+            log.info(f"    无 US Oil 数据")
+            return pd.DataFrame()
+        
+        # 按发布日期汇总钻井数
+        rig_counts = us_oil.groupby('US_PublishDate')['Rig Count Value'].sum().reset_index()
+        rig_counts.columns = ['report_date', 'baker_hughes_rig_count']
+        
+        # 格式化日期
+        rig_counts['report_date'] = pd.to_datetime(rig_counts['report_date']).dt.strftime('%Y-%m-%d')
+        rig_counts['baker_hughes_rig_count'] = rig_counts['baker_hughes_rig_count'].astype(int)
+        
+        # 物理极限: <=0 置为 None
+        rig_counts.loc[rig_counts['baker_hughes_rig_count'] <= 0, 'baker_hughes_rig_count'] = None
+        
+        rig_counts.sort_values('report_date', inplace=True)
+        rig_counts.reset_index(drop=True, inplace=True)
+        
+        log.info(f"    解析成功: {len(rig_counts)} 条记录 "
+                 f"({rig_counts['report_date'].iloc[0]} ~ {rig_counts['report_date'].iloc[-1]})")
+        
+        return rig_counts
+        
+    except Exception as e:
+        log.error(f"    xlsx 解析失败: {e}")
+        return pd.DataFrame()
+
+
+def _parse_bh_xlsb(filepath: Path) -> pd.DataFrame:
+    """
+    解析 Baker Hughes .xlsb 历史归档文件
+    
+    结构: 'US Oil & Gas Split' sheet
+    - header row 6: Date, Oil, Gas, Misc, Total, % Oil, % Gas
+    - Date 列为 Excel 序列号 (需转换)
+    - Oil 列为美国原油钻井数
+    """
+    try:
+        log.info(f"  解析 xlsb: {filepath.name}")
+        
+        # 尝试找 'US Oil & Gas Split' sheet
+        xls = pd.ExcelFile(filepath, engine='pyxlsb')
+        target_sheet = None
+        for name in xls.sheet_names:
+            if 'oil' in name.lower() and 'gas' in name.lower():
+                target_sheet = name
+                break
+        
+        if target_sheet is None:
+            log.info(f"    未找到 Oil & Gas Sheet, sheets: {xls.sheet_names}")
+            return pd.DataFrame()
+        
+        df = pd.read_excel(filepath, sheet_name=target_sheet, header=6, engine='pyxlsb')
+        
+        # 校验
+        if 'Date' not in df.columns or 'Oil' not in df.columns:
+            log.info(f"    缺少 Date/Oil 列, 可用列: {list(df.columns)}")
+            return pd.DataFrame()
+        
+        result = df[['Date', 'Oil']].copy()
+        result.columns = ['report_date', 'baker_hughes_rig_count']
+        
+        # 移除无效行
+        result.dropna(subset=['report_date', 'baker_hughes_rig_count'], inplace=True)
+        
+        # 转换 Excel 序列号日期 (数字 -> datetime)
+        def excel_date_to_str(val):
+            try:
+                if isinstance(val, (int, float)) and val > 10000:
+                    # Excel 序列号: 1900-01-01 = 1
+                    dt = pd.Timestamp('1899-12-30') + pd.Timedelta(days=int(val))
+                    return dt.strftime('%Y-%m-%d')
+                else:
+                    return pd.to_datetime(val).strftime('%Y-%m-%d')
+            except Exception:
+                return None
+        
+        result['report_date'] = result['report_date'].apply(excel_date_to_str)
+        result.dropna(subset=['report_date'], inplace=True)
+        
+        # 转换钻井数
+        result['baker_hughes_rig_count'] = pd.to_numeric(
+            result['baker_hughes_rig_count'], errors='coerce'
+        ).astype('Int64')
+        
+        # 物理极限: <=0 置为 None
+        result.loc[result['baker_hughes_rig_count'] <= 0, 'baker_hughes_rig_count'] = None
+        
+        result.sort_values('report_date', inplace=True)
+        result.reset_index(drop=True, inplace=True)
+        
+        log.info(f"    解析成功: {len(result)} 条记录 "
+                 f"({result['report_date'].iloc[0]} ~ {result['report_date'].iloc[-1]})")
+        
+        return result
+        
+    except Exception as e:
+        log.error(f"    xlsb 解析失败: {e}")
+        return pd.DataFrame()
 
 
 def fetch_inventory_forecast(start_date: str, end_date: str) -> pd.DataFrame:
@@ -356,9 +679,12 @@ def fetch_all_data(start_date: str, end_date: str) -> pd.DataFrame:
     
     for df in [cftc_df, bh_df, forecast_df]:
         if not df.empty and 'report_date' in df.columns:
+            # 统一 report_date 为字符串，防止 object 与 datetime64 类型冲突
+            df['report_date'] = pd.to_datetime(df['report_date']).dt.strftime('%Y-%m-%d')
             if merged_df.empty:
                 merged_df = df
             else:
+                merged_df['report_date'] = pd.to_datetime(merged_df['report_date']).dt.strftime('%Y-%m-%d')
                 merged_df = pd.merge(
                     merged_df, df,
                     on='report_date',
@@ -839,11 +1165,15 @@ def process_weekly_metrics(start_date: str, end_date: str) -> dict:
         raise
 
 
+
+
+if __name__ == "__main__":
+    result = process_weekly_metrics("2024-01-01", "2024-12-31")
+    
+    
 # ============================================================
 # 命令行入口
 # ============================================================
-
-if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(
@@ -891,9 +1221,9 @@ if __name__ == "__main__":
     try:
         result = process_weekly_metrics(args.start, args.end)
         if result['success']:
-            print(f"\n✅ {result['message']}")
+            print(f"\n[OK] {result['message']}")
         else:
-            print(f"\n❌ {result['message']}")
+            print(f"\n[FAIL] {result['message']}")
     except Exception as e:
-        print(f"\n❌ 执行失败: {e}")
+        print(f"\n[FAIL] execution error: {e}")
         exit(1)

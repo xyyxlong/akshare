@@ -306,9 +306,9 @@ class VectorizedValuationCalculator:
             log.error(f"❌ 批量保存失败: {e}")
 
 def run_valuation_job():
-    start_date = '2025-07-09'
-    end_date = '2026-05-26'
-    isall = True  # 是否处理全市场股票
+    start_date = '2026-01-09'
+    end_date = '2026-06-09'
+    isall = False  # 是否处理全市场股票
     
     calculator = VectorizedValuationCalculator(DB_CONFIG, isall=isall)
     

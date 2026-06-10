@@ -1,40 +1,46 @@
 """
-石油日度盘后数据抓取与清洗系统
-功能: 从 yahoo-fin 抓取原油价格、宏观指标，经过清洗与特征计算后，Upsert 到 MySQL
+石油日度盘后数据抓取与清洗系统 (V3.0)
+功能: 从 yfinance 抓取原油价格、宏观指标，经过清洗与特征计算后，Upsert 到 MySQL
+
+版本更新: V3.0 将数据源从 yahoo-fin 更换为 yfinance，后者具有更稳定的 API、
+         更好的维护状态和更丰富的功能支持（如批量下载）。
 
 数据流程:
-    1. 数据采集 (Fetcher) - 调用 yahoo-fin API 获取 WTI, Brent, USD, VIX, TNX, CRAK
+    1. 数据采集 (Fetcher) - 调用 yfinance API 获取 WTI, Brent, USD, VIX, TNX, CRAK
     2. 数据清洗 (Pipeline) - IQR 异常值剔除, 线性插值, 特征工程
     3. 数据持久化 (Storage) - 分块 Upsert 到 MySQL
 
 作者: OpenCode
 日期: 2026-06-09
 
-代码结构概览
+代码结构概览:
 1. 数据采集模块 (Fetcher)
-- fetch_single_ticker() - 获取单个 ticker 数据
-- fetch_all_data() - 外连接合并所有数据源
-- 数据源映射：WTI(CL=F), Brent(BZ=F), USD(DX-Y.NYB), VIX(^VIX), TNX(^TNX), CRAK
+   - fetch_single_ticker() - 获取单个 ticker 数据
+   - fetch_all_data_batch() - 批量下载所有 ticker (推荐)
+   - fetch_all_data() - 外连接合并所有数据源
+   - 数据源映射：WTI(CL=F), Brent(BZ=F), USD(DX-Y.NYB), VIX(^VIX), TNX(^TNX), CRAK
+
 2. 数据清洗模块 (Pipeline)
-- filter_invalid_values() - 剔除 ≤0 的物理错误值
-- remove_outliers_iqr() - 20日滚动窗口 IQR 异常值检测
-- fill_missing_values() - 线性插值 + 前向填充
-- calculate_derived_features() - 计算 wti_60dma, brent_wti_spread, wti_rsi, term_structure
+   - filter_invalid_values() - 剔除 ≤0 的物理错误值
+   - remove_outliers_iqr() - 20日滚动窗口 IQR 异常值检测
+   - fill_missing_values() - 线性插值 + 前向填充
+   - calculate_derived_features() - 计算 wti_60dma, brent_wti_spread, wti_rsi, term_structure
+
 3. 持久化模块 (Storage)
-- prepare_insert_data() - DataFrame 转元组列表
-- upsert_to_mysql() - 分块批量 ON DUPLICATE KEY UPDATE
+   - prepare_insert_data() - DataFrame 转元组列表
+   - upsert_to_mysql() - 分块批量 ON DUPLICATE KEY UPDATE
+
 4. 主入口
-- run_oil_pipeline_job(start_date, end_date) - 完整批处理流程
-使用方式
-# 命令行调用
-python insertDailyOil.py --start 2024-01-01 --end 2024-12-31
-python insertDailyOil.py -s 2024-06-01 -e 2024-06-30
+   - run_oil_pipeline_job(start_date, end_date) - 完整批处理流程
 
-# Python 调用
-from insertDailyOil import run_oil_pipeline_job
-result = run_oil_pipeline_job('2024-01-01', '2024-12-31')
+使用方式:
+    # 命令行调用
+    python insertDailyOil.py --start 2024-01-01 --end 2024-12-31
+    python insertDailyOil.py -s 2024-06-01 -e 2024-06-30
 
-
+    # Python 调用
+    from insertDailyOil import run_oil_pipeline_job
+    result = run_oil_pipeline_job('2024-01-01', '2024-12-31')
 """
 
 import pandas as pd
@@ -46,8 +52,8 @@ from typing import Optional, List, Tuple
 import time
 import random
 
-# yahoo-fin 用于获取金融数据
-from yahoo_fin import stock_info as si
+# yfinance 用于获取金融数据 (V3.0 更新: 替换 yahoo-fin)
+import yfinance as yf
 
 # 项目内部模块
 import log4ak
@@ -70,7 +76,7 @@ DB_CONFIG = {
     'cursorclass': pymysql.cursors.DictCursor
 }
 
-# Yahoo-fin 数据源映射
+# yfinance 数据源映射 (V3.0 更新)
 TICKER_MAP = {
     'wti_close': 'CL=F',       # WTI 原油期货
     'brent_close': 'BZ=F',     # Brent 原油期货
@@ -95,12 +101,12 @@ BATCH_SIZE = 500
 
 
 # ============================================================
-# 1. 数据采集模块 (Fetcher)
+# 1. 数据采集模块 (Fetcher) - V3.0 使用 yfinance
 # ============================================================
 
 def fetch_single_ticker(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
-    从 yahoo-fin 获取单个 ticker 的历史数据
+    使用 yfinance 获取单个 ticker 的历史数据
     
     Args:
         ticker: Yahoo Finance 股票/期货代码
@@ -108,33 +114,44 @@ def fetch_single_ticker(ticker: str, start_date: str, end_date: str) -> pd.DataF
         end_date: 结束日期 (YYYY-MM-DD)
     
     Returns:
-        DataFrame 包含 trade_date 和 adjclose 列
+        DataFrame 包含 trade_date 和 Close 列
     """
     try:
         log.info(f"正在获取 {ticker} 数据: {start_date} ~ {end_date}")
         
-        # 调用 yahoo-fin API
-        df = si.get_data(
-            ticker,
-            start_date=start_date,
-            end_date=end_date,
-            index_as_date=True
+        # 使用 yfinance download 函数
+        df = yf.download(
+            tickers=ticker,
+            start=start_date,
+            end=end_date,
+            auto_adjust=True,      # 自动调整价格（复权），Close 即为复权价
+            progress=False,        # 关闭进度条
+            threads=True           # 启用多线程
         )
         
         if df is None or df.empty:
             log.info(f"⚠️ {ticker} 返回空数据")
             return pd.DataFrame()
         
-        # 提取复权收盘价
-        df = df[['adjclose']].copy()
+        # 提取收盘价 (auto_adjust=True 时，Close 即为复权价)
+        # yfinance 返回的列名可能是 MultiIndex，需要处理
+        if isinstance(df.columns, pd.MultiIndex):
+            df = df['Close'].to_frame(name='Close')
+        else:
+            df = df[['Close']].copy()
+        
+        # 移除时区信息 (yfinance 特有注意事项)
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+        
         df.index.name = 'trade_date'
         df.reset_index(inplace=True)
         df['trade_date'] = pd.to_datetime(df['trade_date']).dt.strftime('%Y-%m-%d')
         
         log.info(f"✅ {ticker} 获取成功，共 {len(df)} 条记录")
         
-        # API 限流保护: 随机延迟 1-3 秒
-        time.sleep(random.uniform(1, 3))
+        # API 限流保护: yfinance 更稳定，可减少延迟
+        time.sleep(random.uniform(0.5, 1.0))
         
         return df
         
@@ -143,9 +160,11 @@ def fetch_single_ticker(ticker: str, start_date: str, end_date: str) -> pd.DataF
         return pd.DataFrame()
 
 
-def fetch_all_data(start_date: str, end_date: str) -> pd.DataFrame:
+def fetch_all_data_batch(start_date: str, end_date: str) -> pd.DataFrame:
     """
-    获取所有 ticker 数据并按 trade_date 外连接合并
+    批量获取所有 ticker 数据 (yfinance 优势功能)
+    
+    使用 yf.download 一次性下载多个 ticker，减少 API 调用次数
     
     Args:
         start_date: 开始日期 (YYYY-MM-DD)
@@ -154,7 +173,83 @@ def fetch_all_data(start_date: str, end_date: str) -> pd.DataFrame:
     Returns:
         合并后的 DataFrame
     """
-    log.info(f"===== 开始数据采集: {start_date} ~ {end_date} =====")
+    log.info(f"===== 开始批量数据采集: {start_date} ~ {end_date} =====")
+    
+    tickers = list(TICKER_MAP.values())
+    field_names = list(TICKER_MAP.keys())
+    
+    try:
+        # 批量下载所有 ticker
+        df = yf.download(
+            tickers=tickers,
+            start=start_date,
+            end=end_date,
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+            group_by='ticker'  # 按 ticker 分组
+        )
+        
+        if df is None or df.empty:
+            log.error("❌ 批量下载返回空数据")
+            return pd.DataFrame()
+        
+        # 移除时区信息
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+        
+        # 提取每个 ticker 的 Close 价格并重命名
+        result_df = pd.DataFrame(index=df.index)
+        
+        for field_name, ticker in TICKER_MAP.items():
+            try:
+                if isinstance(df.columns, pd.MultiIndex):
+                    # MultiIndex 结构: (ticker, price_type)
+                    if ticker in df.columns.get_level_values(0):
+                        result_df[field_name] = df[(ticker, 'Close')]
+                    else:
+                        log.info(f"⚠️ {ticker} 数据不存在")
+                        result_df[field_name] = np.nan
+                else:
+                    # 单个 ticker 时的结构
+                    if 'Close' in df.columns:
+                        result_df[field_name] = df['Close']
+            except Exception as e:
+                log.info(f"⚠️ 提取 {ticker} 数据失败: {e}")
+                result_df[field_name] = np.nan
+        
+        result_df.index.name = 'trade_date'
+        result_df.reset_index(inplace=True)
+        result_df['trade_date'] = pd.to_datetime(result_df['trade_date']).dt.strftime('%Y-%m-%d')
+        
+        # 按日期升序排列 (防止未来函数)
+        result_df['trade_date'] = pd.to_datetime(result_df['trade_date'])
+        result_df.sort_values('trade_date', inplace=True)
+        result_df.reset_index(drop=True, inplace=True)
+        
+        log.info(f"✅ 批量数据采集完成，共 {len(result_df)} 条记录")
+        
+        return result_df
+        
+    except Exception as e:
+        log.error(f"❌ 批量下载失败: {e}")
+        # 降级到逐个下载
+        log.info("降级到逐个下载模式...")
+        return fetch_all_data(start_date, end_date)
+
+
+def fetch_all_data(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    逐个获取 ticker 数据并按 trade_date 外连接合并 (备用方案)
+    
+    Args:
+        start_date: 开始日期 (YYYY-MM-DD)
+        end_date: 结束日期 (YYYY-MM-DD)
+    
+    Returns:
+        合并后的 DataFrame
+    """
+    log.info(f"===== 开始逐个数据采集: {start_date} ~ {end_date} =====")
     
     merged_df = None
     
@@ -164,8 +259,8 @@ def fetch_all_data(start_date: str, end_date: str) -> pd.DataFrame:
         if df.empty:
             continue
         
-        # 重命名 adjclose 为目标字段名
-        df.rename(columns={'adjclose': field_name}, inplace=True)
+        # 重命名 Close 为目标字段名
+        df.rename(columns={'Close': field_name}, inplace=True)
         
         if merged_df is None:
             merged_df = df
@@ -214,8 +309,10 @@ def filter_invalid_values(df: pd.DataFrame) -> pd.DataFrame:
     # 特殊处理: us_10y_yield 可能返回百分比格式
     if 'us_10y_yield' in df.columns:
         # 若大于 10 则除以 10 (设计文档要求)
-        df.loc[df['us_10y_yield'] > 10, 'us_10y_yield'] = \
-            df.loc[df['us_10y_yield'] > 10, 'us_10y_yield'] / 10
+        mask = df['us_10y_yield'] > 10
+        if mask.any():
+            df.loc[mask, 'us_10y_yield'] = df.loc[mask, 'us_10y_yield'] / 10
+            log.info(f"  us_10y_yield: {mask.sum()} 个值进行百分比格式校正")
     
     return df
 
@@ -499,13 +596,14 @@ def upsert_to_mysql(data: List[Tuple]) -> int:
 # 4. 主入口函数
 # ============================================================
 
-def run_oil_pipeline_job(start_date: str, end_date: str) -> dict:
+def run_oil_pipeline_job(start_date: str, end_date: str, use_batch: bool = True) -> dict:
     """
     批处理任务主入口
     
     Args:
         start_date: 起始日期 (YYYY-MM-DD 格式)
         end_date: 结束日期 (YYYY-MM-DD 格式)
+        use_batch: 是否使用批量下载模式 (默认 True，推荐)
     
     Returns:
         执行结果字典，包含 success, records_count, elapsed_time 等信息
@@ -522,8 +620,9 @@ def run_oil_pipeline_job(start_date: str, end_date: str) -> dict:
     try:
         # 1. 输入校验
         log.info("=" * 60)
-        log.info(f"原油日度数据批处理任务启动")
+        log.info(f"原油日度数据批处理任务启动 (yfinance V3.0)")
         log.info(f"日期范围: {start_date} ~ {end_date}")
+        log.info(f"下载模式: {'批量下载' if use_batch else '逐个下载'}")
         log.info("=" * 60)
         
         try:
@@ -535,8 +634,11 @@ def run_oil_pipeline_job(start_date: str, end_date: str) -> dict:
         if start_dt > end_dt:
             raise ValueError(f"start_date ({start_date}) 不能大于 end_date ({end_date})")
         
-        # 2. 数据采集
-        raw_df = fetch_all_data(start_date, end_date)
+        # 2. 数据采集 (V3.0: 优先使用批量下载)
+        if use_batch:
+            raw_df = fetch_all_data_batch(start_date, end_date)
+        else:
+            raw_df = fetch_all_data(start_date, end_date)
         
         if raw_df.empty:
             result['message'] = '数据采集失败，无有效数据'
@@ -573,45 +675,65 @@ def run_oil_pipeline_job(start_date: str, end_date: str) -> dict:
         raise
 
 
-# ============================================================
-# 命令行入口
-# ============================================================
+
 
 if __name__ == "__main__":
-    import argparse
+    result = run_oil_pipeline_job(
+            "2024-01-01", 
+            "2024-12-31", 
+            True
+        )
     
-    parser = argparse.ArgumentParser(
-        description='原油日度盘后数据抓取与清洗系统',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  python insertDailyOil.py --start 2024-01-01 --end 2024-12-31
-  python insertDailyOil.py -s 2024-06-01 -e 2024-06-30
-        """
-    )
     
-    parser.add_argument(
-        '-s', '--start',
-        type=str,
-        required=True,
-        help='起始日期 (YYYY-MM-DD 格式)'
-    )
     
-    parser.add_argument(
-        '-e', '--end',
-        type=str,
-        required=True,
-        help='结束日期 (YYYY-MM-DD 格式)'
-    )
+# ============================================================
+# 命令行入口
+# ============================================================    
+#     import argparse
     
-    args = parser.parse_args()
+#     parser = argparse.ArgumentParser(
+#         description='原油日度盘后数据抓取与清洗系统 (yfinance V3.0)',
+#         formatter_class=argparse.RawDescriptionHelpFormatter,
+#         epilog="""
+# 示例:
+#   python insertDailyOil.py --start 2024-01-01 --end 2024-12-31
+#   python insertDailyOil.py -s 2024-06-01 -e 2024-06-30
+#   python insertDailyOil.py -s 2024-01-01 -e 2024-12-31 --no-batch  # 禁用批量下载
+#         """
+#     )
     
-    try:
-        result = run_oil_pipeline_job(args.start, args.end)
-        if result['success']:
-            print(f"\n✅ {result['message']}")
-        else:
-            print(f"\n❌ {result['message']}")
-    except Exception as e:
-        print(f"\n❌ 执行失败: {e}")
-        exit(1)
+#     parser.add_argument(
+#         '-s', '--start',
+#         type=str,
+#         required=True,
+#         help='起始日期 (YYYY-MM-DD 格式)'
+#     )
+    
+#     parser.add_argument(
+#         '-e', '--end',
+#         type=str,
+#         required=True,
+#         help='结束日期 (YYYY-MM-DD 格式)'
+#     )
+    
+#     parser.add_argument(
+#         '--no-batch',
+#         action='store_true',
+#         help='禁用批量下载模式，改为逐个下载'
+#     )
+    
+#     args = parser.parse_args()
+    
+#     try:
+#         result = run_oil_pipeline_job(
+#             args.start, 
+#             args.end, 
+#             use_batch=not args.no_batch
+#         )
+#         if result['success']:
+#             print(f"\n✅ {result['message']}")
+#         else:
+#             print(f"\n❌ {result['message']}")
+#     except Exception as e:
+#         print(f"\n❌ 执行失败: {e}")
+#         exit(1)
